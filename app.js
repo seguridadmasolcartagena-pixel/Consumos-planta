@@ -1,6 +1,7 @@
 const FLOW_URL = "https://default65afa47b9e4e4ad28cfe30d4118f06.2e.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/07/workflows/2dead834c4b5407194a6caeddd6abd4c/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=SzGhuT8ppyDUsTHEHhP6VnoHkCzotgy6tzIs3k4sFEA";
 
 const DRAFT_KEY = "masol-consumos-planta-draft-v1";
+const OPERATOR_KEY = "masol-consumos-planta-operator-v1";
 const MONTHS = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
@@ -64,6 +65,7 @@ const form = document.querySelector("#readingsForm");
 const sectionsContainer = document.querySelector("#readingsSections");
 const dateInput = document.querySelector("#readingDate");
 const operatorInput = document.querySelector("#operatorName");
+const operatorEmailInput = document.querySelector("#operatorEmail");
 const progressBar = document.querySelector("#progressBar");
 const progressLabel = document.querySelector("#progressLabel");
 const readyCount = document.querySelector("#readyCount");
@@ -101,6 +103,13 @@ function localIsoDate() {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function deviceType() {
+  const width = window.innerWidth;
+  if (width < 620) return "Movil";
+  if (width < 1024) return "Tableta";
+  return "Escritorio";
 }
 
 function renderSections() {
@@ -217,9 +226,15 @@ function saveDraft() {
     if (input.value.trim()) values[input.dataset.column] = input.value.trim();
   });
 
+  const operator = {
+    name: operatorInput.value.trim(),
+    email: operatorEmailInput.value.trim().toLowerCase()
+  };
+  localStorage.setItem(OPERATOR_KEY, JSON.stringify(operator));
   localStorage.setItem(DRAFT_KEY, JSON.stringify({
     date: dateInput.value,
-    operator: operatorInput.value.trim(),
+    operator: operator.name,
+    operatorEmail: operator.email,
     values,
     savedAt: Date.now()
   }));
@@ -228,13 +243,26 @@ function saveDraft() {
 
 function restoreDraft() {
   const raw = localStorage.getItem(DRAFT_KEY);
+  const storedOperator = localStorage.getItem(OPERATOR_KEY);
   dateInput.value = localIsoDate();
+
+  if (storedOperator) {
+    try {
+      const operator = JSON.parse(storedOperator);
+      operatorInput.value = operator.name || "";
+      operatorEmailInput.value = operator.email || "";
+    } catch {
+      localStorage.removeItem(OPERATOR_KEY);
+    }
+  }
+
   if (!raw) return;
 
   try {
     const draft = JSON.parse(raw);
     dateInput.value = draft.date || localIsoDate();
-    operatorInput.value = draft.operator || "";
+    operatorInput.value = draft.operator || operatorInput.value;
+    operatorEmailInput.value = draft.operatorEmail || operatorEmailInput.value;
     Object.entries(draft.values || {}).forEach(([column, value]) => {
       const input = document.querySelector(`[data-column="${column}"]`);
       if (input) input.value = value;
@@ -290,6 +318,10 @@ async function submitReadings(event) {
       operatorInput.focus();
       throw new Error("Introduce el nombre del operario.");
     }
+    if (!operatorEmailInput.value.trim() || !operatorEmailInput.validity.valid) {
+      operatorEmailInput.focus();
+      throw new Error("Introduce un correo corporativo valido.");
+    }
 
     const readings = collectReadings();
     if (readings.length === 0) {
@@ -303,6 +335,14 @@ async function submitReadings(event) {
       fechaLectura: dateInput.value,
       horaLectura: "08:00",
       operario: operatorInput.value.trim(),
+      operarioEmail: operatorEmailInput.value.trim().toLowerCase(),
+      fechaHoraRegistro: new Date().toISOString(),
+      dispositivo: {
+        tipo: deviceType(),
+        anchoPantalla: window.innerWidth,
+        altoPantalla: window.innerHeight,
+        navegador: navigator.userAgent
+      },
       lecturasJson: JSON.stringify(readings)
     };
 
