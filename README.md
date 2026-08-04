@@ -2,6 +2,8 @@
 
 Aplicación web instalable para registrar las lecturas diarias de consumos de Masol Cartagena. Envía las lecturas a Power Automate, donde siguen el circuito de aprobación y escritura en el Excel mensual de SharePoint.
 
+El formulario sigue el orden físico de la hoja `Mes Año` de `Plantilla_Consumos_Planta.xlsx`: Producción (`B:R`), Mantenimiento eléctrico (`S:AB`) y Mantenimiento/servicios (`AC:AR`). Las columnas de `Totales` se conservan en el mapa enviado al flujo.
+
 ## Publicación
 
 El flujo de GitHub Actions publica automáticamente la rama `main` mediante GitHub Pages. En la configuración del repositorio, `Settings > Pages > Build and deployment` debe estar seleccionado `GitHub Actions`.
