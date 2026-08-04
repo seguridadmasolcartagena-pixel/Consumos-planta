@@ -8,9 +8,9 @@ const MONTHS = [
 ];
 
 const GROUPS = [
-  { id: "produccion", label: "Producción", detail: "Lecturas de lunes a domingo" },
-  { id: "electrico", label: "Mantenimiento eléctrico", detail: "Lecturas de lunes a viernes" },
-  { id: "servicios", label: "Mantenimiento y servicios", detail: "Contadores auxiliares" }
+  { id: "produccion", label: "Producción", detail: "Columnas B:R · lunes a domingo" },
+  { id: "electrico", label: "Mantenimiento eléctrico", detail: "Columnas S:AB · lunes a viernes" },
+  { id: "servicios", label: "Mantenimiento y servicios", detail: "Columnas AC:AR · contadores auxiliares" }
 ];
 
 const READINGS = [
@@ -23,42 +23,42 @@ const READINGS = [
   reading(7, "produccion", "Contador Desmi Salida", "H", "H", "Totalizador"),
   reading(8, "produccion", "Contador Reactor Biológico", "I", "I", "Totalizador"),
   reading(9, "produccion", "Contador Agua EDARI", "J", "J", "Totalizador"),
-  reading(10, "produccion", "Salida mar", "AO", "K", "Totalizador"),
-  reading(11, "produccion", "ERM analógico", "K", "L", "Totalizador"),
-  reading(12, "produccion", "ERM volumen bruto Vmt", "L", "M", "Totalizador"),
-  reading(13, "produccion", "ERM volumen corregido Vbt", "M", "N", "Totalizador"),
-  reading(14, "produccion", "Cfv", "N", "O", "LecturaDirecta"),
-  reading(15, "produccion", "Contador Gas Natural", "O", "P", "Totalizador"),
-  reading(16, "produccion", "Contador 800H1", "P", "Q", "Totalizador"),
-  reading(17, "produccion", "Contador Metanol", "Q", "R", "Totalizador"),
-  reading(18, "produccion", "Nivel O2 (%)", "R", "S", "LecturaDirecta", { min: 0, max: 100 }),
-  reading(19, "produccion", "Totalizador 390", "AR", "AT", "Totalizador"),
+  reading(10, "produccion", "ERM analógico", "K", "L", "Totalizador"),
+  reading(11, "produccion", "ERM volumen bruto Vmt", "L", "M", "Totalizador"),
+  reading(12, "produccion", "ERM volumen corregido Vbt", "M", "N", "Totalizador"),
+  reading(13, "produccion", "Cfv", "N", "O", "LecturaDirecta"),
+  reading(14, "produccion", "Contador Gas Natural", "O", "P", "Totalizador"),
+  reading(15, "produccion", "Contador 800H1", "P", "Q", "Totalizador"),
+  reading(16, "produccion", "Contador Metanol", "Q", "R", "Totalizador"),
+  reading(17, "produccion", "Nivel O2 (%)", "R", "S", "LecturaDirecta", { min: 0, max: 100 }),
 
-  reading(20, "electrico", "Lectura eléctrica Bio 90.LVB.05", "S", "T", "TotalizadorDiv10"),
-  reading(21, "electrico", "P1", "T", "U", "Totalizador"),
-  reading(22, "electrico", "P2", "U", "V", "Totalizador"),
-  reading(23, "electrico", "P3", "V", "W", "Totalizador"),
-  reading(24, "electrico", "P4", "W", "X", "Totalizador"),
-  reading(25, "electrico", "P5", "X", "Y", "Totalizador"),
-  reading(26, "electrico", "P6", "Y", "Z", "Totalizador"),
-  reading(27, "electrico", "Trafo 1", "Z", "AB", "Totalizador"),
-  reading(28, "electrico", "Trafo 2", "AA", "AC", "Totalizador"),
-  reading(29, "electrico", "Trafo 3", "AB", "AD", "Totalizador"),
+  reading(18, "electrico", "Lectura eléctrica Bio 90.LVB.05", "S", "T", "TotalizadorDiv10"),
+  reading(19, "electrico", "P1", "T", "U", "Totalizador"),
+  reading(20, "electrico", "P2", "U", "V", "Totalizador"),
+  reading(21, "electrico", "P3", "V", "W", "Totalizador"),
+  reading(22, "electrico", "P4", "W", "X", "Totalizador"),
+  reading(23, "electrico", "P5", "X", "Y", "Totalizador"),
+  reading(24, "electrico", "P6", "Y", "Z", "Totalizador"),
+  reading(25, "electrico", "Trafo 1", "Z", "AB", "Totalizador"),
+  reading(26, "electrico", "Trafo 2", "AA", "AC", "Totalizador"),
+  reading(27, "electrico", "Trafo 3", "AB", "AD", "Totalizador"),
 
-  reading(30, "servicios", "Contador Refino 90.LVB.06", "AC", "AE", "Totalizador"),
-  reading(31, "servicios", "Contador B. Cubetos 90.LVB.07", "AD", "AG", "Totalizador"),
-  reading(32, "servicios", "Contador Servicios 90.LVB.08", "AE", "AH", "Totalizador"),
-  reading(33, "servicios", "Contador Edificios 90.LVB.09", "AF", "AI", "Totalizador"),
-  reading(34, "servicios", "Contador Emergencia 90.LVB.10", "AG", "AJ", "Totalizador"),
-  reading(35, "servicios", "Compresor A RUN", "AH", "AK", "Totalizador"),
-  reading(36, "servicios", "Compresor B RUN", "AI", "AL", "Totalizador"),
-  reading(37, "servicios", "Compresor C RUN", "AJ", "AM", "Totalizador"),
-  reading(38, "servicios", "Compresor A marcha", "AK", "AN", "Totalizador"),
-  reading(39, "servicios", "Compresor B marcha", "AL", "AO", "Totalizador"),
-  reading(40, "servicios", "Compresor C marcha", "AM", "AP", "Totalizador"),
-  reading(41, "servicios", "Contador EDARI", "AQ", "AQ", "Totalizador"),
-  reading(42, "servicios", "PALSHAL", "AN", "AR", "Totalizador"),
-  reading(43, "servicios", "Ampliación 90.LVB.10 / Contador vehículos", "AP", "AS", "Totalizador")
+  reading(28, "servicios", "Contador Refino 90.LVB.06", "AC", "AE", "Totalizador"),
+  reading(29, "servicios", "Contador B. Cubetos 90.LVB.07", "AD", "AG", "Totalizador"),
+  reading(30, "servicios", "Contador Servicios 90.LVB.08", "AE", "AH", "Totalizador"),
+  reading(31, "servicios", "Contador Edificios 90.LVB.09", "AF", "AI", "Totalizador"),
+  reading(32, "servicios", "Contador Emergencia 90.LVB.10", "AG", "AJ", "Totalizador"),
+  reading(33, "servicios", "Compresor A RUN", "AH", "AK", "Totalizador"),
+  reading(34, "servicios", "Compresor B RUN", "AI", "AL", "Totalizador"),
+  reading(35, "servicios", "Compresor C RUN", "AJ", "AM", "Totalizador"),
+  reading(36, "servicios", "Compresor A marcha", "AK", "AN", "Totalizador"),
+  reading(37, "servicios", "Compresor B marcha", "AL", "AO", "Totalizador"),
+  reading(38, "servicios", "Compresor C marcha", "AM", "AP", "Totalizador"),
+  reading(39, "servicios", "PALSHAL", "AN", "AR", "Totalizador"),
+  reading(40, "servicios", "Salida mar", "AO", "K", "Totalizador"),
+  reading(41, "servicios", "Ampliación 90.LVB.10 / Contador vehículos", "AP", "AS", "Totalizador"),
+  reading(42, "servicios", "Contador EDARI", "AQ", "AQ", "Totalizador"),
+  reading(43, "servicios", "Totalizador 390", "AR", "AT", "Totalizador")
 ];
 
 const form = document.querySelector("#readingsForm");
@@ -88,7 +88,7 @@ function reading(Orden, group, NombreCampo, ColumnaLectura, ColumnaTotales, Tipo
   return {
     Orden,
     group,
-    Bloque: group === "produccion" ? "PRODUCCION L a D" : group === "electrico" ? "MANTENIMIENTO L a V" : "MTO",
+    Bloque: group === "produccion" ? "PRODUCCION L a D" : "MANTENIMIENTO L a V",
     NombreCampo,
     ColumnaLectura,
     ColumnaTotales,
@@ -206,12 +206,12 @@ function updateProgress() {
 
 function updateDestination() {
   if (!dateInput.value) {
-    sheetDestination.textContent = "Destino: archivo mensual";
+    sheetDestination.textContent = "Destino: hoja Mes Año";
     return;
   }
   const [year, month] = dateInput.value.split("-");
   const monthName = MONTHS[Number(month) - 1];
-  sheetDestination.textContent = `Destino: Datos-Planta-${monthName}-${year}.xlsx · ${monthName} ${year}`;
+  sheetDestination.textContent = `Destino: hoja Mes Año · ${monthName} ${year}`;
 }
 
 function queueDraftSave() {
