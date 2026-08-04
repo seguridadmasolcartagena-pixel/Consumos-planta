@@ -415,9 +415,40 @@ async function requestBackend(accion, payload) {
 }
 
 function buildReadings(columns = null) {
-  const readings = collectReadings();
-  if (!columns) return readings;
-  return readings.filter((item) => columns.has(item.ColumnaLectura));
+  if (!columns) return collectReadings();
+
+  return READINGS
+    .filter((item) => columns.has(item.ColumnaLectura))
+    .map((item) => {
+      const input = document.querySelector(`[data-column="${item.ColumnaLectura}"]`);
+      if (!input.value.trim()) {
+        return {
+          Orden: item.Orden,
+          Bloque: item.Bloque,
+          NombreCampo: item.NombreCampo,
+          ColumnaLectura: item.ColumnaLectura,
+          ColumnaTotales: item.ColumnaTotales,
+          TipoValidacion: item.TipoValidacion,
+          Valor: null
+        };
+      }
+
+      if (!validateInput(input)) {
+        input.closest("details").open = true;
+        input.focus();
+        throw new Error("Revisa los valores marcados antes de guardar.");
+      }
+
+      return {
+        Orden: item.Orden,
+        Bloque: item.Bloque,
+        NombreCampo: item.NombreCampo,
+        ColumnaLectura: item.ColumnaLectura,
+        ColumnaTotales: item.ColumnaTotales,
+        TipoValidacion: item.TipoValidacion,
+        Valor: parseNumber(input.value)
+      };
+    });
 }
 
 function queueDraftSave() {
