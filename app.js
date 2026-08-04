@@ -68,7 +68,6 @@ const form = document.querySelector("#readingsForm");
 const sectionsContainer = document.querySelector("#readingsSections");
 const dateInput = document.querySelector("#readingDate");
 const operatorInput = document.querySelector("#operatorName");
-const operatorEmailInput = document.querySelector("#operatorEmail");
 const progressBar = document.querySelector("#progressBar");
 const progressLabel = document.querySelector("#progressLabel");
 const readyCount = document.querySelector("#readyCount");
@@ -200,12 +199,7 @@ function updateProgress() {
   const count = validInputs.length;
   const missing = READINGS.length - count;
   const percentage = (count / READINGS.length) * 100;
-  const identityReady = Boolean(
-    dateInput.value &&
-    operatorInput.value.trim() &&
-    operatorEmailInput.value.trim() &&
-    operatorEmailInput.validity.valid
-  );
+  const identityReady = Boolean(dateInput.value && operatorInput.value.trim());
 
   inputs.forEach((input) => {
     const filled = input.value.trim() !== "" && !input.classList.contains("invalid");
@@ -274,8 +268,7 @@ function currentValues() {
 
 function persistOperator() {
   localStorage.setItem(OPERATOR_KEY, JSON.stringify({
-    name: operatorInput.value.trim(),
-    email: operatorEmailInput.value.trim().toLowerCase()
+    name: operatorInput.value.trim()
   }));
 }
 
@@ -307,7 +300,6 @@ function restoreOperator() {
   try {
     const operator = JSON.parse(storedOperator);
     operatorInput.value = operator.name || "";
-    operatorEmailInput.value = operator.email || "";
   } catch {
     localStorage.removeItem(OPERATOR_KEY);
   }
@@ -468,9 +460,9 @@ async function saveDraft() {
     return true;
   }
 
-  if (!operatorInput.value.trim() || !operatorEmailInput.value.trim() || !operatorEmailInput.validity.valid) {
+  if (!operatorInput.value.trim()) {
     saveLocalDraft(false);
-    draftLabel.textContent = "Guardado local · identifícate para compartir";
+    draftLabel.textContent = "Guardado local · indica el operario para compartir";
     updateProgress();
     return false;
   }
@@ -505,7 +497,6 @@ async function saveDraft() {
     fechaLectura: activeDate,
     horaLectura: "08:00",
     operario: operatorInput.value.trim(),
-    operarioEmail: operatorEmailInput.value.trim().toLowerCase(),
     fechaHoraRegistro: new Date().toISOString(),
     versionBorrador: lastSharedRevision,
     lecturasJson: JSON.stringify(readings)
@@ -640,11 +631,6 @@ async function submitReadings(event) {
       operatorInput.focus();
       throw new Error("Introduce el nombre del operario.");
     }
-    if (!operatorEmailInput.value.trim() || !operatorEmailInput.validity.valid) {
-      operatorEmailInput.focus();
-      throw new Error("Introduce un correo corporativo válido.");
-    }
-
     const readings = collectReadings();
     if (readings.length !== READINGS.length) {
       const firstMissing = [...document.querySelectorAll("[data-column]")]
@@ -668,8 +654,7 @@ async function submitReadings(event) {
       fechaLectura: dateInput.value,
       horaLectura: "08:00",
       operario: operatorInput.value.trim(),
-      operarioEmail: operatorEmailInput.value.trim().toLowerCase(),
-      fechaHoraRegistro: new Date().toISOString(),
+        fechaHoraRegistro: new Date().toISOString(),
       versionBorrador: lastSharedRevision,
       dispositivo: {
         tipo: deviceType(),
@@ -753,7 +738,7 @@ async function initialize() {
       return;
     }
 
-    if (event.target === operatorInput || event.target === operatorEmailInput) {
+    if (event.target === operatorInput) {
       persistOperator();
       updateProgress();
       if (dirtyColumns.size > 0) queueDraftSave();
