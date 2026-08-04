@@ -1,0 +1,20 @@
+{
+  "name": "Lecturas de planta | Masol Cartagena",
+  "short_name": "Lecturas planta",
+  "description": "Registro diario de lecturas y consumos de planta",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f7f6",
+  "theme_color": "#0b6655",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
