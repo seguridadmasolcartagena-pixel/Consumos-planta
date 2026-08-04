@@ -1,7 +1,10 @@
 const FLOW_URL = "https://default65afa47b9e4e4ad28cfe30d4118f06.2e.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/07/workflows/2dead834c4b5407194a6caeddd6abd4c/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=SzGhuT8ppyDUsTHEHhP6VnoHkCzotgy6tzIs3k4sFEA";
 
-const DRAFT_KEY = "masol-consumos-planta-draft-v1";
+const LEGACY_DRAFT_KEY = "masol-consumos-planta-draft-v1";
+const DRAFT_KEY_PREFIX = "masol-consumos-planta-draft-v2:";
 const OPERATOR_KEY = "masol-consumos-planta-operator-v1";
+const SHARED_DRAFT_SAVE_DELAY = 900;
+const REQUEST_TIMEOUT = 15000;
 const MONTHS = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
@@ -83,6 +86,14 @@ const toast = document.querySelector("#toast");
 
 let deferredInstallPrompt;
 let draftTimer;
+let activeDate = "";
+let loadingDraft = false;
+let savingDraft = false;
+let submitting = false;
+let formSent = false;
+let lastSharedRevision = null;
+let savePromise = null;
+const dirtyColumns = new Set();
 
 function reading(Orden, group, NombreCampo, ColumnaLectura, ColumnaTotales, TipoValidacion, limits = {}) {
   return {
@@ -185,23 +196,58 @@ function validateInput(input) {
 
 function updateProgress() {
   const inputs = [...document.querySelectorAll("[data-column]")];
-  const filled = inputs.filter((input) => input.value.trim() !== "");
-  const count = filled.length;
+  const validInputs = inputs.filter((input) => input.value.trim() !== "" && validateInput(input));
+  const count = validInputs.length;
+  const missing = READINGS.length - count;
   const percentage = (count / READINGS.length) * 100;
+  const identityReady = Boolean(
+    dateInput.value &&
+    operatorInput.value.trim() &&
+    operatorEmailInput.value.trim() &&
+    operatorEmailInput.validity.valid
+  );
 
   inputs.forEach((input) => {
-    input.closest(".reading-field").classList.toggle("filled", input.value.trim() !== "");
+    const filled = input.value.trim() !== "" && !input.classList.contains("invalid");
+    input.closest(".reading-field").classList.toggle("filled", filled);
   });
 
   GROUPS.forEach((group) => {
     const groupInputs = [...document.querySelectorAll(`[data-group="${group.id}"] [data-column]`)];
-    const groupFilled = groupInputs.filter((input) => input.value.trim() !== "").length;
-    document.querySelector(`[data-group-count="${group.id}"]`).textContent = `${groupFilled} / ${groupInputs.length}`;
+    const groupFilled = groupInputs.filter(
+      (input) => input.value.trim() !== "" && !input.classList.contains("invalid")
+    ).length;
+    document.querySelector(`[data-group-count="${group.id}"]`).textContent =
+      `${groupFilled} / ${groupInputs.length}`;
   });
 
   progressBar.style.width = `${percentage}%`;
   progressLabel.textContent = `${count} de ${READINGS.length} lecturas`;
-  readyCount.textContent = count === 1 ? "1 lectura preparada" : `${count} lecturas preparadas`;
+  readyCount.textContent = count === READINGS.length
+    ? "Formulario completo"
+    : `${count} de ${READINGS.length} lecturas guardadas`;
+
+  const canSubmit =
+    count === READINGS.length &&
+    identityReady &&
+    navigator.onLine &&
+    !loadingDraft &&
+    !savingDraft &&
+    !submitting &&
+    !formSent &&
+    dirtyColumns.size === 0;
+
+  submitButton.disabled = !canSubmit;
+
+  const buttonLabel = submitButton.querySelector("span");
+  if (formSent) buttonLabel.textContent = "Formulario enviado";
+  else if (submitting) buttonLabel.textContent = "Enviando…";
+  else if (loadingDraft) buttonLabel.textContent = "Cargando borrador…";
+  else if (savingDraft || dirtyColumns.size > 0) buttonLabel.textContent = "Guardando avance…";
+  else if (missing > 0) buttonLabel.textContent = `Faltan ${missing} lecturas`;
+  else if (!identityReady) buttonLabel.textContent = "Completa la identificación";
+  else if (!navigator.onLine) buttonLabel.textContent = "Sin conexión";
+  else buttonLabel.textContent = "Enviar formulario completo";
 }
 
 function updateDestination() {
@@ -214,62 +260,307 @@ function updateDestination() {
   sheetDestination.textContent = `Destino: hoja Mes Año · ${monthName} ${year}`;
 }
 
-function queueDraftSave() {
-  clearTimeout(draftTimer);
-  draftLabel.textContent = "Guardando borrador…";
-  draftTimer = setTimeout(saveDraft, 350);
+function localDraftKey(date = activeDate || dateInput.value) {
+  return `${DRAFT_KEY_PREFIX}${date || "sin-fecha"}`;
 }
 
-function saveDraft() {
+function currentValues() {
   const values = {};
   document.querySelectorAll("[data-column]").forEach((input) => {
     if (input.value.trim()) values[input.dataset.column] = input.value.trim();
   });
-
-  const operator = {
-    name: operatorInput.value.trim(),
-    email: operatorEmailInput.value.trim().toLowerCase()
-  };
-  localStorage.setItem(OPERATOR_KEY, JSON.stringify(operator));
-  localStorage.setItem(DRAFT_KEY, JSON.stringify({
-    date: dateInput.value,
-    operator: operator.name,
-    operatorEmail: operator.email,
-    values,
-    savedAt: Date.now()
-  }));
-  draftLabel.textContent = "Borrador guardado";
+  return values;
 }
 
-function restoreDraft() {
-  const raw = localStorage.getItem(DRAFT_KEY);
-  const storedOperator = localStorage.getItem(OPERATOR_KEY);
-  dateInput.value = localIsoDate();
+function persistOperator() {
+  localStorage.setItem(OPERATOR_KEY, JSON.stringify({
+    name: operatorInput.value.trim(),
+    email: operatorEmailInput.value.trim().toLowerCase()
+  }));
+}
 
-  if (storedOperator) {
-    try {
-      const operator = JSON.parse(storedOperator);
-      operatorInput.value = operator.name || "";
-      operatorEmailInput.value = operator.email || "";
-    } catch {
-      localStorage.removeItem(OPERATOR_KEY);
-    }
+function saveLocalDraft(synced = false, date = activeDate || dateInput.value) {
+  if (!date) return;
+  persistOperator();
+  localStorage.setItem(localDraftKey(date), JSON.stringify({
+    date,
+    values: currentValues(),
+    savedAt: Date.now(),
+    synced
+  }));
+}
+
+function readLocalDraft(date) {
+  const raw = localStorage.getItem(localDraftKey(date));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    localStorage.removeItem(localDraftKey(date));
+    return null;
   }
+}
 
+function restoreOperator() {
+  const storedOperator = localStorage.getItem(OPERATOR_KEY);
+  if (!storedOperator) return;
+  try {
+    const operator = JSON.parse(storedOperator);
+    operatorInput.value = operator.name || "";
+    operatorEmailInput.value = operator.email || "";
+  } catch {
+    localStorage.removeItem(OPERATOR_KEY);
+  }
+}
+
+function migrateLegacyDraft() {
+  const raw = localStorage.getItem(LEGACY_DRAFT_KEY);
   if (!raw) return;
-
   try {
     const draft = JSON.parse(raw);
-    dateInput.value = draft.date || localIsoDate();
-    operatorInput.value = draft.operator || operatorInput.value;
-    operatorEmailInput.value = draft.operatorEmail || operatorEmailInput.value;
-    Object.entries(draft.values || {}).forEach(([column, value]) => {
-      const input = document.querySelector(`[data-column="${column}"]`);
-      if (input) input.value = value;
-    });
-    draftLabel.textContent = "Borrador recuperado";
+    const date = draft.date || localIsoDate();
+    localStorage.setItem(localDraftKey(date), JSON.stringify({
+      date,
+      values: draft.values || {},
+      savedAt: draft.savedAt || Date.now(),
+      synced: false
+    }));
   } catch {
-    localStorage.removeItem(DRAFT_KEY);
+    // El borrador anterior no se puede recuperar.
+  }
+  localStorage.removeItem(LEGACY_DRAFT_KEY);
+}
+
+function clearReadings() {
+  document.querySelectorAll("[data-column]").forEach((input) => {
+    input.value = "";
+    input.classList.remove("invalid");
+    input.removeAttribute("aria-invalid");
+  });
+}
+
+function applyValues(values, overwrite = true) {
+  Object.entries(values || {}).forEach(([column, value]) => {
+    const input = document.querySelector(`[data-column="${column}"]`);
+    if (!input || value === null || value === undefined || value === "") return;
+    if (overwrite || !input.value.trim()) input.value = String(value).replace(".", ",");
+  });
+}
+
+function parseReadingsSource(source) {
+  if (!source) return {};
+  if (typeof source === "string") {
+    try {
+      return parseReadingsSource(JSON.parse(source));
+    } catch {
+      return {};
+    }
+  }
+  if (Array.isArray(source)) {
+    return Object.fromEntries(
+      source
+        .filter((item) => item && item.ColumnaLectura && item.Valor !== undefined)
+        .map((item) => [item.ColumnaLectura, item.Valor])
+    );
+  }
+  if (source.values && typeof source.values === "object") return source.values;
+  if (source.lecturasJson !== undefined) return parseReadingsSource(source.lecturasJson);
+  if (source.lecturas !== undefined) return parseReadingsSource(source.lecturas);
+  return {};
+}
+
+function sharedDraftFrom(result) {
+  const source = result?.borrador || result?.draft || result || {};
+  return {
+    values: parseReadingsSource(source),
+    revision: source.revision ?? source.version ?? result?.revision ?? result?.version ?? null,
+    sent: source.estado === "enviado" || result?.estado === "enviado"
+  };
+}
+
+async function requestBackend(accion, payload) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  try {
+    const response = await fetch(FLOW_URL, {
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({ accion, ...payload })
+    });
+
+    const responseText = await response.text();
+    let result = {};
+    if (responseText) {
+      try {
+        result = JSON.parse(responseText);
+      } catch {
+        result = { mensaje: responseText };
+      }
+    }
+
+    if (!response.ok) {
+      throw new Error(result.mensaje || `El servicio respondió con el código ${response.status}.`);
+    }
+    return result;
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("El servicio tardó demasiado en responder.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function buildReadings(columns = null) {
+  const readings = collectReadings();
+  if (!columns) return readings;
+  return readings.filter((item) => columns.has(item.ColumnaLectura));
+}
+
+function queueDraftSave() {
+  clearTimeout(draftTimer);
+  saveLocalDraft(false);
+  draftLabel.textContent = navigator.onLine
+    ? "Pendiente de sincronizar…"
+    : "Guardado local · pendiente de conexión";
+  updateProgress();
+  draftTimer = setTimeout(() => saveDraft(), SHARED_DRAFT_SAVE_DELAY);
+}
+
+async function saveDraft() {
+  if (savePromise) return savePromise;
+  if (!activeDate || dirtyColumns.size === 0) {
+    saveLocalDraft(true);
+    return true;
+  }
+
+  if (!operatorInput.value.trim() || !operatorEmailInput.value.trim() || !operatorEmailInput.validity.valid) {
+    saveLocalDraft(false);
+    draftLabel.textContent = "Guardado local · identifícate para compartir";
+    updateProgress();
+    return false;
+  }
+
+  if (!navigator.onLine) {
+    saveLocalDraft(false);
+    draftLabel.textContent = "Guardado local · pendiente de conexión";
+    updateProgress();
+    return false;
+  }
+
+  const columnsToSave = new Set(dirtyColumns);
+  let readings;
+  try {
+    readings = buildReadings(columnsToSave);
+  } catch (error) {
+    saveLocalDraft(false);
+    draftLabel.textContent = "Hay valores pendientes de corregir";
+    updateProgress();
+    return false;
+  }
+
+  if (readings.length === 0) return true;
+
+  const savedValues = currentValues();
+  savingDraft = true;
+  draftLabel.textContent = "Sincronizando con SharePoint…";
+  updateProgress();
+
+  savePromise = requestBackend("guardar_borrador", {
+    idFormulario: `${activeDate}-08:00`,
+    fechaLectura: activeDate,
+    horaLectura: "08:00",
+    operario: operatorInput.value.trim(),
+    operarioEmail: operatorEmailInput.value.trim().toLowerCase(),
+    fechaHoraRegistro: new Date().toISOString(),
+    versionBorrador: lastSharedRevision,
+    lecturasJson: JSON.stringify(readings)
+  }).then((result) => {
+    const shared = sharedDraftFrom(result);
+    lastSharedRevision = shared.revision;
+    applyValues(shared.values, false);
+
+    columnsToSave.forEach((column) => {
+      const input = document.querySelector(`[data-column="${column}"]`);
+      if (input?.value.trim() === savedValues[column]) dirtyColumns.delete(column);
+    });
+
+    saveLocalDraft(dirtyColumns.size === 0);
+    draftLabel.textContent = dirtyColumns.size === 0
+      ? "Borrador compartido guardado"
+      : "Hay cambios nuevos por sincronizar";
+    return true;
+  }).catch((error) => {
+    saveLocalDraft(false);
+    draftLabel.textContent = "Guardado local · error al sincronizar";
+    showToast(error.message || "No se pudo guardar el borrador compartido.");
+    return false;
+  }).finally(() => {
+    savingDraft = false;
+    savePromise = null;
+    updateProgress();
+    if (dirtyColumns.size > 0 && navigator.onLine) queueDraftSave();
+  });
+
+  return savePromise;
+}
+
+async function restoreDraft(date = dateInput.value || localIsoDate()) {
+  clearTimeout(draftTimer);
+  const requestDate = date;
+  const local = readLocalDraft(requestDate);
+  activeDate = requestDate;
+  dateInput.value = requestDate;
+  clearReadings();
+  dirtyColumns.clear();
+  formSent = false;
+  lastSharedRevision = null;
+
+  loadingDraft = true;
+  draftLabel.textContent = "Cargando borrador compartido…";
+  updateProgress();
+
+  try {
+    const result = await requestBackend("cargar_borrador", {
+      idFormulario: `${requestDate}-08:00`,
+      fechaLectura: requestDate,
+      horaLectura: "08:00"
+    });
+
+    if (activeDate !== requestDate) return;
+    const shared = sharedDraftFrom(result);
+    applyValues(shared.values, true);
+    lastSharedRevision = shared.revision;
+    formSent = shared.sent;
+
+    if (local && !local.synced) {
+      applyValues(local.values, true);
+      Object.keys(local.values || {}).forEach((column) => dirtyColumns.add(column));
+      draftLabel.textContent = "Borrador recuperado · cambios locales pendientes";
+    } else {
+      draftLabel.textContent = Object.keys(shared.values).length
+        ? "Borrador compartido recuperado"
+        : "Borrador compartido vacío";
+      saveLocalDraft(true, requestDate);
+    }
+  } catch (error) {
+    if (activeDate !== requestDate) return;
+    if (local) {
+      applyValues(local.values, true);
+      if (!local.synced) Object.keys(local.values || {}).forEach((column) => dirtyColumns.add(column));
+      draftLabel.textContent = "Borrador local · SharePoint no disponible";
+    } else {
+      draftLabel.textContent = "SharePoint no disponible";
+    }
+  } finally {
+    if (activeDate === requestDate) {
+      loadingDraft = false;
+      updateProgress();
+      if (dirtyColumns.size > 0 && navigator.onLine) queueDraftSave();
+    }
   }
 }
 
@@ -320,23 +611,35 @@ async function submitReadings(event) {
     }
     if (!operatorEmailInput.value.trim() || !operatorEmailInput.validity.valid) {
       operatorEmailInput.focus();
-      throw new Error("Introduce un correo corporativo valido.");
+      throw new Error("Introduce un correo corporativo válido.");
     }
 
     const readings = collectReadings();
-    if (readings.length === 0) {
-      document.querySelector(".reading-section").open = true;
-      document.querySelector("[data-column]").focus();
-      throw new Error("Introduce al menos una lectura antes de enviar.");
+    if (readings.length !== READINGS.length) {
+      const firstMissing = [...document.querySelectorAll("[data-column]")]
+        .find((input) => !input.value.trim() || !validateInput(input));
+      firstMissing?.closest("details")?.setAttribute("open", "");
+      firstMissing?.focus();
+      throw new Error(`Faltan ${READINGS.length - readings.length} lecturas válidas. El formulario aún no se puede enviar.`);
+    }
+
+    if (dirtyColumns.size > 0) {
+      const saved = await saveDraft();
+      if (!saved || dirtyColumns.size > 0) {
+        throw new Error("No se pudo guardar el último avance en SharePoint. El formulario no se enviará.");
+      }
     }
 
     setSubmitting(true);
     const payload = {
+      idFormulario: `${dateInput.value}-08:00`,
+      idempotencyKey: `lecturas-${dateInput.value}-08:00`,
       fechaLectura: dateInput.value,
       horaLectura: "08:00",
       operario: operatorInput.value.trim(),
       operarioEmail: operatorEmailInput.value.trim().toLowerCase(),
       fechaHoraRegistro: new Date().toISOString(),
+      versionBorrador: lastSharedRevision,
       dispositivo: {
         tipo: deviceType(),
         anchoPantalla: window.innerWidth,
@@ -346,33 +649,25 @@ async function submitReadings(event) {
       lecturasJson: JSON.stringify(readings)
     };
 
-    const response = await fetch(FLOW_URL, {
-      method: "POST",
-      mode: "cors",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+    const result = await requestBackend("enviar_completo", payload);
+    formSent = true;
+    localStorage.removeItem(localDraftKey(dateInput.value));
+    dirtyColumns.clear();
+    draftLabel.textContent = "Formulario enviado";
 
-    const responseText = await response.text();
-    let result = {};
-    if (responseText) {
-      try { result = JSON.parse(responseText); } catch { result = { mensaje: responseText }; }
-    }
-
-    if (!response.ok) {
-      throw new Error(result.mensaje || `El flujo respondió con el código ${response.status}.`);
-    }
-
-    localStorage.removeItem(DRAFT_KEY);
     showResult(
       true,
       "Lecturas enviadas",
-      result.mensaje || "La solicitud se ha enviado a aprobación."
+      result.mensaje || "El formulario completo se ha enviado correctamente."
     );
   } catch (error) {
     showToast(error.message || "No se pudo enviar la solicitud.");
     if (error instanceof TypeError) {
-      showResult(false, "No se pudo conectar", "El navegador no pudo comunicarse con Power Automate. Revisa la conexión y la configuración CORS del flujo.");
+      showResult(
+        false,
+        "No se pudo conectar",
+        "El navegador no pudo comunicarse con el servicio. El borrador permanece guardado."
+      );
     }
   } finally {
     setSubmitting(false);
@@ -380,11 +675,9 @@ async function submitReadings(event) {
 }
 
 function setSubmitting(active) {
-  submitButton.disabled = active;
-  submitButton.querySelector("span").textContent = active ? "Enviando…" : "Enviar a aprobación";
-  submitButton.querySelector("svg")?.setAttribute("data-lucide", active ? "loader-circle" : "send");
+  submitting = active;
   submitButton.classList.toggle("loading", active);
-  if (window.lucide) lucide.createIcons();
+  updateProgress();
 }
 
 function showResult(success, title, message) {
@@ -407,21 +700,42 @@ function updateConnectionState() {
   const online = navigator.onLine;
   connectionState.classList.toggle("offline", !online);
   connectionLabel.textContent = online ? "En línea" : "Sin conexión";
+  updateProgress();
+  if (online && dirtyColumns.size > 0) queueDraftSave();
 }
 
-function initialize() {
+async function initialize() {
   renderSections();
-  restoreDraft();
+  restoreOperator();
+  migrateLegacyDraft();
+  dateInput.value = localIsoDate();
   updateDestination();
-  updateProgress();
   updateConnectionState();
+  await restoreDraft(dateInput.value);
 
   form.addEventListener("input", (event) => {
-    if (event.target.matches("[data-column]")) validateInput(event.target);
-    updateProgress();
-    queueDraftSave();
+    if (event.target.matches("[data-column]")) {
+      validateInput(event.target);
+      dirtyColumns.add(event.target.dataset.column);
+      updateProgress();
+      queueDraftSave();
+      return;
+    }
+
+    if (event.target === operatorInput || event.target === operatorEmailInput) {
+      persistOperator();
+      updateProgress();
+      if (dirtyColumns.size > 0) queueDraftSave();
+    }
   });
-  dateInput.addEventListener("change", updateDestination);
+
+  dateInput.addEventListener("change", async () => {
+    clearTimeout(draftTimer);
+    if (activeDate) saveLocalDraft(dirtyColumns.size === 0, activeDate);
+    updateDestination();
+    await restoreDraft(dateInput.value);
+  });
+
   form.addEventListener("submit", submitReadings);
   document.querySelector("#closeDialog").addEventListener("click", () => resultDialog.close());
   window.addEventListener("online", updateConnectionState);
