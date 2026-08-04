@@ -190,7 +190,7 @@ main {
 
 .context-band {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(420px, 0.9fr);
+  grid-template-columns: minmax(0, 0.85fr) minmax(600px, 1.15fr);
   gap: 44px;
   align-items: end;
   padding: 10px 0 30px;
@@ -219,7 +219,7 @@ h1 {
 
 .context-fields {
   display: grid;
-  grid-template-columns: 0.8fr 1.2fr;
+  grid-template-columns: 0.8fr 1.1fr 1.2fr;
   gap: 14px;
 }
 
@@ -592,6 +592,16 @@ h1 {
   }
 }
 
+@media (max-width: 760px) {
+  .context-fields {
+    grid-template-columns: 0.8fr 1.2fr;
+  }
+
+  .context-fields .field:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 620px) {
   :root {
     --header-height: 64px;
@@ -677,3 +687,4 @@ h1 {
     transition-duration: 0.01ms !important;
   }
 }
+
