@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b6655" />
+    <meta name="description" content="Registro diario de lecturas de planta de Masol Cartagena" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>Lecturas de planta | Masol Cartagena</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#formulario">Ir al formulario</a>
+
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><i data-lucide="factory"></i></span>
+        <span>
+          <strong>MASOL Cartagena</strong>
+          <small>Lecturas de planta</small>
+        </span>
+      </div>
+
+      <div class="header-actions">
+        <span class="connection-state" id="connectionState">
+          <span class="state-dot" aria-hidden="true"></span>
+          <span id="connectionLabel">En línea</span>
+        </span>
+        <button class="icon-button" id="installButton" type="button" title="Instalar aplicación" hidden>
+          <i data-lucide="download"></i>
+          <span class="sr-only">Instalar aplicación</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="formulario">
+      <form id="readingsForm" novalidate>
+        <section class="context-band" aria-labelledby="formTitle">
+          <div class="context-heading">
+            <p class="eyebrow">Registro diario · 08:00</p>
+            <h1 id="formTitle">Lecturas de consumos</h1>
+            <p id="sheetDestination">Destino: archivo mensual</p>
+          </div>
+
+          <div class="context-fields">
+            <label class="field compact-field">
+              <span>Fecha de lectura</span>
+              <input id="readingDate" name="fechaLectura" type="date" required />
+            </label>
+
+            <label class="field compact-field">
+              <span>Operario</span>
+              <input
+                id="operatorName"
+                name="operario"
+                type="text"
+                autocomplete="name"
+                maxlength="100"
+                placeholder="Nombre y apellidos"
+                required
+              />
+            </label>
+          </div>
+        </section>
+
+        <div class="progress-region" aria-live="polite">
+          <div class="progress-copy">
+            <span id="progressLabel">0 de 43 lecturas</span>
+            <span id="draftLabel">Borrador local</span>
+          </div>
+          <div class="progress-track" aria-hidden="true">
+            <span id="progressBar"></span>
+          </div>
+        </div>
+
+        <section id="readingsSections" class="readings-sections" aria-label="Lecturas por área"></section>
+
+        <div class="submission-bar">
+          <div class="submission-summary">
+            <i data-lucide="clipboard-check" aria-hidden="true"></i>
+            <span>
+              <strong id="readyCount">0 lecturas preparadas</strong>
+              <small>Los campos vacíos no se enviarán.</small>
+            </span>
+          </div>
+          <button class="primary-button" id="submitButton" type="submit">
+            <span>Enviar a aprobación</span>
+            <i data-lucide="send" aria-hidden="true"></i>
+          </button>
+        </div>
+      </form>
+    </main>
+
+    <dialog id="resultDialog" class="result-dialog">
+      <div class="dialog-icon" id="dialogIcon" aria-hidden="true">
+        <i data-lucide="check"></i>
+      </div>
+      <h2 id="dialogTitle">Lecturas enviadas</h2>
+      <p id="dialogMessage">La solicitud se ha enviado a aprobación.</p>
+      <button class="secondary-button" id="closeDialog" type="button">Continuar</button>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
