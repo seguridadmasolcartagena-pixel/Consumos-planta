@@ -65,7 +65,6 @@ const form = document.querySelector("#readingsForm");
 const sectionsContainer = document.querySelector("#readingsSections");
 const dateInput = document.querySelector("#readingDate");
 const operatorInput = document.querySelector("#operatorName");
-const operatorEmailInput = document.querySelector("#operatorEmail");
 const progressBar = document.querySelector("#progressBar");
 const progressLabel = document.querySelector("#progressLabel");
 const readyCount = document.querySelector("#readyCount");
@@ -227,14 +226,12 @@ function saveDraft() {
   });
 
   const operator = {
-    name: operatorInput.value.trim(),
-    email: operatorEmailInput.value.trim().toLowerCase()
+    name: operatorInput.value.trim()
   };
   localStorage.setItem(OPERATOR_KEY, JSON.stringify(operator));
   localStorage.setItem(DRAFT_KEY, JSON.stringify({
     date: dateInput.value,
     operator: operator.name,
-    operatorEmail: operator.email,
     values,
     savedAt: Date.now()
   }));
@@ -250,7 +247,6 @@ function restoreDraft() {
     try {
       const operator = JSON.parse(storedOperator);
       operatorInput.value = operator.name || "";
-      operatorEmailInput.value = operator.email || "";
     } catch {
       localStorage.removeItem(OPERATOR_KEY);
     }
@@ -262,7 +258,6 @@ function restoreDraft() {
     const draft = JSON.parse(raw);
     dateInput.value = draft.date || localIsoDate();
     operatorInput.value = draft.operator || operatorInput.value;
-    operatorEmailInput.value = draft.operatorEmail || operatorEmailInput.value;
     Object.entries(draft.values || {}).forEach(([column, value]) => {
       const input = document.querySelector(`[data-column="${column}"]`);
       if (input) input.value = value;
@@ -318,10 +313,6 @@ async function submitReadings(event) {
       operatorInput.focus();
       throw new Error("Introduce el nombre del operario.");
     }
-    if (!operatorEmailInput.value.trim() || !operatorEmailInput.validity.valid) {
-      operatorEmailInput.focus();
-      throw new Error("Introduce un correo corporativo valido.");
-    }
 
     const readings = collectReadings();
     if (readings.length === 0) {
@@ -335,7 +326,6 @@ async function submitReadings(event) {
       fechaLectura: dateInput.value,
       horaLectura: "08:00",
       operario: operatorInput.value.trim(),
-      operarioEmail: operatorEmailInput.value.trim().toLowerCase(),
       fechaHoraRegistro: new Date().toISOString(),
       dispositivo: {
         tipo: deviceType(),
