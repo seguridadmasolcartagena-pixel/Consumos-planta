@@ -1,4 +1,4 @@
-const CACHE_NAME = "masol-lecturas-v2";
+const CACHE_NAME = "masol-lecturas-v3";
 const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
