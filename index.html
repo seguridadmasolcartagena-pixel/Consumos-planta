@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0b6655" />
-    <meta name="description" content="Registro diario de lecturas de planta de Masol Cartagena" />
+    <meta name="description" content="Registro compartido de lecturas de planta de Masol Cartagena" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
@@ -16,20 +16,18 @@
     <header class="app-header">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true"><i data-lucide="factory"></i></span>
-        <span>
-          <strong>MASOL Cartagena</strong>
-          <small>Lecturas de planta</small>
-        </span>
+        <span><strong>MASOL Cartagena</strong><small>Lecturas de planta</small></span>
       </div>
-
       <div class="header-actions">
         <span class="connection-state" id="connectionState">
           <span class="state-dot" aria-hidden="true"></span>
           <span id="connectionLabel">En línea</span>
         </span>
+        <button class="icon-button" id="refreshButton" type="button" title="Actualizar lecturas compartidas">
+          <i data-lucide="refresh-cw"></i><span class="sr-only">Actualizar lecturas compartidas</span>
+        </button>
         <button class="icon-button" id="installButton" type="button" title="Instalar aplicación" hidden>
-          <i data-lucide="download"></i>
-          <span class="sr-only">Instalar aplicación</span>
+          <i data-lucide="download"></i><span class="sr-only">Instalar aplicación</span>
         </button>
       </div>
     </header>
@@ -38,73 +36,57 @@
       <form id="readingsForm" novalidate>
         <section class="context-band" aria-labelledby="formTitle">
           <div class="context-heading">
-            <p class="eyebrow">Registro diario · 08:00</p>
+            <p class="eyebrow">Registro diario · borrador compartido</p>
             <h1 id="formTitle">Lecturas de consumos</h1>
             <p id="sheetDestination">Destino: hoja Mes Año</p>
           </div>
-
           <div class="context-fields">
             <label class="field compact-field">
               <span>Fecha de lectura</span>
               <input id="readingDate" name="fechaLectura" type="date" required />
             </label>
-
             <label class="field compact-field">
               <span>Operario</span>
-              <input
-                id="operatorName"
-                name="operario"
-                type="text"
-                autocomplete="name"
-                maxlength="100"
-                placeholder="Nombre y apellidos"
-                required
-              />
+              <input id="operatorName" name="operario" type="text" autocomplete="name" maxlength="100" placeholder="Nombre y apellidos" required />
             </label>
-
           </div>
         </section>
 
+        <div class="shared-state" id="sharedState" role="status" aria-live="polite">
+          <i data-lucide="cloud"></i>
+          <span><strong id="sharedTitle">Cargando borrador compartido</strong><small id="sharedDetail">Consultando SharePoint para la fecha seleccionada.</small></span>
+        </div>
+
         <div class="progress-region" aria-live="polite">
-          <div class="progress-copy">
-            <span id="progressLabel">0 de 43 lecturas</span>
-            <span id="draftLabel">Borrador local</span>
-          </div>
-          <div class="progress-track" aria-hidden="true">
-            <span id="progressBar"></span>
-          </div>
+          <div class="progress-copy"><span id="progressLabel">0 de 43 lecturas</span><span id="draftLabel">Sin cambios pendientes</span></div>
+          <div class="progress-track" aria-hidden="true"><span id="progressBar"></span></div>
         </div>
 
         <section id="readingsSections" class="readings-sections" aria-label="Lecturas por área"></section>
 
         <div class="submission-bar">
           <div class="submission-summary">
-            <i data-lucide="clipboard-check" aria-hidden="true"></i>
-            <span>
-              <strong id="readyCount">0 de 43 lecturas guardadas</strong>
-              <small>El envío se habilitará cuando el formulario esté completo.</small>
-            </span>
+            <i data-lucide="users" aria-hidden="true"></i>
+            <span><strong id="readyCount">0 lecturas disponibles</strong><small>Las lecturas en verde proceden del borrador compartido.</small></span>
           </div>
-          <button class="primary-button" id="submitButton" type="submit" disabled>
-            <span>Faltan 43 lecturas</span>
-            <i data-lucide="send" aria-hidden="true"></i>
-          </button>
+          <div class="submission-actions">
+            <button class="secondary-button" id="saveButton" type="button"><i data-lucide="cloud-upload"></i><span>Guardar borrador</span></button>
+            <button class="primary-button" id="submitButton" type="submit" disabled><span>Faltan 43 lecturas</span><i data-lucide="send" aria-hidden="true"></i></button>
+          </div>
         </div>
       </form>
     </main>
 
     <dialog id="resultDialog" class="result-dialog">
-      <div class="dialog-icon" id="dialogIcon" aria-hidden="true">
-        <i data-lucide="check"></i>
-      </div>
+      <div class="dialog-icon" id="dialogIcon" aria-hidden="true"><i data-lucide="check"></i></div>
       <h2 id="dialogTitle">Lecturas enviadas</h2>
       <p id="dialogMessage">La solicitud se ha enviado a aprobación.</p>
       <button class="secondary-button" id="closeDialog" type="button">Continuar</button>
     </dialog>
-
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script src="config.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
