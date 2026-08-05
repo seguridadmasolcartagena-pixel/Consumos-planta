@@ -1,40 +1,62 @@
-# Configuración de SharePoint y Power Automate
+# Power Automate con borradores JSON en SharePoint
 
-Esta versión usa Power Automate como API. La aplicación nunca accede directamente a SharePoint ni al Excel.
+La aplicación no escribe directamente en SharePoint ni en Excel. Solo envía y recibe JSON mediante un flujo HTTP. Power Automate es responsable de crear el borrador, devolverlo al segundo dispositivo, solicitar aprobación y ejecutar el Office Script.
 
-## 1. Crear la lista de borradores
+## 1. Crear las carpetas
 
-En el sitio de SharePoint de planta, crea una lista llamada `LecturasPlantaBorradores` con estas columnas:
+Dentro de la biblioteca donde están los libros de consumos, crea:
 
-| Columna | Tipo | Configuración |
-|---|---|---|
-| `Title` | Texto | Se usará la misma clave técnica |
-| `Clave` | Texto | Valores únicos: Sí; ejemplo `2026-08-05|B` |
-| `FechaClave` | Texto | Formato `AAAA-MM-DD`, indexada |
-| `Columna` | Texto | Columna del Excel, por ejemplo `B` |
-| `Valor` | Número | Permitir decimales |
-| `Operario` | Texto | Nombre del último operario que cambió el valor |
-| `FechaRegistro` | Fecha y hora | Incluir hora |
-| `Dispositivo` | Texto | Móvil, tableta o escritorio |
-| `Estado` | Elección | `Borrador`, `Enviado`, `Aprobado`, `Rechazado`, `Error` |
+```text
+Consumos Planta/
+├── Borradores/
+└── Procesados/
+```
 
-La clave única evita dos registros distintos para el mismo contador y día. Concede edición solo al grupo de operarios y responsables.
+Cada fecha tendrá un único archivo:
 
-## 2. Crear el Office Script
+```text
+Borrador_Lecturas_2026-08-05.json
+```
 
-1. Abre en Excel para la web uno de los libros mensuales.
-2. Ve a `Automatizar > Nuevo script`.
-3. Nómbralo `EscribirLecturasPlanta`.
-4. Sustituye el contenido por [EscribirLecturasPlanta.ts](../office-scripts/EscribirLecturasPlanta.ts).
-5. Guarda el script en una ubicación accesible para la cuenta de conexión del flujo.
+No es necesario crear una lista de SharePoint.
 
-El script busca la fecha en la columna A de la hoja mensual y de `Totales`. Para totalizadores calcula `lectura nueva - lectura anterior` y divide el resultado entre todos los días naturales transcurridos. Para `TotalizadorDiv10` aplica además el factor `/10`. Si falta una fila diaria en `Totales`, devuelve un aviso; si una lectura baja respecto a la anterior, detiene toda la escritura.
+## 2. Formato del archivo JSON
 
-## 3. Crear el flujo HTTP
+La aplicación genera el documento completo. Ejemplo reducido:
 
-Crea un flujo de nube instantáneo llamado `API_Lecturas_Planta` con el disparador `Cuando se recibe una solicitud HTTP`.
+```json
+{
+  "version": 1,
+  "fechaLectura": "2026-08-05",
+  "horaLectura": "08:00",
+  "estado": "Borrador",
+  "actualizadoPor": "Operario A",
+  "actualizadoEn": "2026-08-05T07:15:00.000Z",
+  "dispositivo": {
+    "tipo": "Movil",
+    "anchoPantalla": 390,
+    "altoPantalla": 844,
+    "navegador": "..."
+  },
+  "lecturas": [
+    {
+      "Orden": 1,
+      "Bloque": "PRODUCCION L a D",
+      "NombreCampo": "Contador General H2O",
+      "ColumnaLectura": "B",
+      "ColumnaTotales": "B",
+      "TipoValidacion": "Totalizador",
+      "Valor": 123456.78
+    }
+  ]
+}
+```
 
-Usa este esquema JSON en el disparador:
+## 3. Crear el flujo
+
+Crea un flujo de nube instantáneo llamado `API_Lecturas_Planta_JSON` con el disparador `Cuando se recibe una solicitud HTTP`.
+
+Esquema del disparador:
 
 ```json
 {
@@ -42,148 +64,179 @@ Usa este esquema JSON en el disparador:
   "properties": {
     "accion": { "type": "string" },
     "fechaLectura": { "type": "string" },
-    "horaLectura": { "type": "string" },
-    "operario": { "type": "string" },
-    "fechaHoraRegistro": { "type": "string" },
-    "dispositivo": {},
-    "lecturasJson": { "type": "string" },
-    "lecturas": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "Orden": { "type": "integer" },
-          "Bloque": { "type": "string" },
-          "NombreCampo": { "type": "string" },
-          "ColumnaLectura": { "type": "string" },
-          "ColumnaTotales": { "type": "string" },
-          "TipoValidacion": { "type": "string" },
-          "Valor": { "type": "number" }
-        },
-        "required": ["Orden", "NombreCampo", "ColumnaLectura", "ColumnaTotales", "TipoValidacion", "Valor"]
-      }
-    }
+    "borradorJson": { "type": "string" }
   },
   "required": ["accion", "fechaLectura"]
 }
 ```
 
-Añade un control `Cambiar` usando `triggerBody()?['accion']`. Crea los casos `cargar`, `guardar`, `enviar` y un caso predeterminado que responda `400`.
+Después del disparador, añade `Componer - Nombre JSON`:
 
-### Caso `cargar`
+```text
+concat('Borrador_Lecturas_',triggerBody()?['fechaLectura'],'.json')
+```
 
-1. Añade `SharePoint > Obtener elementos` sobre `LecturasPlantaBorradores`.
-2. En `Consulta de filtro` usa:
+Añade un control `Cambiar` sobre:
+
+```text
+triggerBody()?['accion']
+```
+
+Crea los casos `cargar`, `guardar`, `enviar` y un caso predeterminado.
+
+## 4. Caso cargar
+
+1. Añade `SharePoint > Obtener archivos (solo propiedades)`.
+2. Selecciona la biblioteca que contiene `Consumos Planta`.
+3. Limita las entradas a la carpeta `Consumos Planta/Borradores`.
+4. En `Consulta de filtro` usa:
 
    ```text
-   FechaClave eq '@{triggerBody()?['fechaLectura']}'
+   FileLeafRef eq '@{outputs('Componer_-_Nombre_JSON')}'
    ```
 
-3. Añade `Operaciones de datos > Seleccionar`; como origen usa `value` de Obtener elementos y mapea:
+5. Añade una condición:
 
-   | Salida | Valor SharePoint |
-   |---|---|
-   | `ColumnaLectura` | `item()?['Columna']` |
-   | `Valor` | `item()?['Valor']` |
-   | `Operario` | `item()?['Operario']` |
-   | `Estado` | `item()?['Estado']?['Value']` |
+   ```text
+   length(body('Obtener_archivos_(solo_propiedades)')?['value'])
+   ```
 
-4. Añade `Solicitud > Respuesta`, código `200`, cuerpo:
+   es mayor que `0`.
+
+6. Si existe, añade `Obtener contenido del archivo` usando este identificador:
+
+   ```text
+   first(body('Obtener_archivos_(solo_propiedades)')?['value'])?['Identifier']
+   ```
+
+7. Responde con código `200` y este cuerpo:
 
    ```json
    {
      "ok": true,
-     "lecturas": "@{body('Seleccionar')}"
+     "borradorJson": "@{base64ToString(body('Obtener_contenido_del_archivo')?['$content'])}"
    }
    ```
 
-### Caso `guardar`
-
-1. Añade `Aplicar a cada` sobre `triggerBody()?['lecturas']`.
-2. Dentro, crea `Componer - Clave`:
-
-   ```text
-   concat(triggerBody()?['fechaLectura'],'|',items('Aplicar_a_cada')?['ColumnaLectura'])
-   ```
-
-3. Añade `Obtener elementos`, filtro `Clave eq '@{outputs('Componer_-_Clave')}'` y recuento máximo `1`.
-4. Añade una condición: `length(body('Obtener_elementos')?['value'])` es mayor que `0`.
-5. Si existe, usa `Actualizar elemento` con el ID:
-
-   ```text
-   first(body('Obtener_elementos')?['value'])?['ID']
-   ```
-
-6. Si no existe, usa `Crear elemento`.
-7. En ambos casos asigna `Title` y `Clave` a la clave compuesta, `FechaClave`, `Columna`, `Valor`, `Operario`, `FechaRegistro`, `Dispositivo` y `Estado = Borrador`.
-8. Fuera del bucle responde `200`:
+8. Si no existe, responde `200`:
 
    ```json
-   { "ok": true, "mensaje": "Borrador guardado en SharePoint" }
+   { "ok": true, "borradorJson": "" }
    ```
 
-No actives la simultaneidad dentro de `Aplicar a cada`: así se evitan carreras al actualizar la misma clave.
+## 5. Caso guardar
 
-### Caso `enviar`
+1. Añade `Analizar JSON - Borrador` usando `triggerBody()?['borradorJson']` como contenido. Puedes generar el esquema pegando el ejemplo anterior.
+2. Comprueba que la fecha interna coincide con la fecha de la petición:
 
-1. Añade una condición `length(triggerBody()?['lecturas'])` igual a `43`. Si no se cumple, responde `400` y no continúes.
-2. Responde inmediatamente con código `202`:
+   ```text
+   body('Analizar_JSON_-_Borrador')?['fechaLectura']
+   ```
+
+   debe ser igual a `triggerBody()?['fechaLectura']`.
+
+3. Repite `Obtener archivos (solo propiedades)` con el mismo filtro del caso cargar.
+4. Si el archivo existe, usa `SharePoint > Actualizar archivo`:
+
+   - Identificador: el primer `Identifier` encontrado.
+   - Contenido: `triggerBody()?['borradorJson']`.
+
+5. Si no existe, usa `SharePoint > Crear archivo`:
+
+   - Carpeta: `Consumos Planta/Borradores`.
+   - Nombre: salida de `Componer - Nombre JSON`.
+   - Contenido: `triggerBody()?['borradorJson']`.
+
+6. Después de la condición responde `200`:
+
+   ```json
+   { "ok": true, "mensaje": "Archivo JSON guardado en SharePoint" }
+   ```
+
+La aplicación envía siempre el documento completo. El segundo operario primero carga el archivo existente, añade sus medidas y vuelve a guardar el JSON completo.
+
+## 6. Caso enviar
+
+1. Analiza `triggerBody()?['borradorJson']`.
+2. Comprueba:
+
+   ```text
+   length(body('Analizar_JSON_-_Envio')?['lecturas'])
+   ```
+
+   igual a `43`.
+
+3. Crea o actualiza el archivo JSON igual que en el caso guardar.
+4. Responde inmediatamente con código `202`:
 
    ```json
    { "ok": true, "mensaje": "Lecturas enviadas a aprobación" }
    ```
 
-3. Después de la respuesta, añade `Iniciar y esperar una aprobación`, tipo `Aprobar/Rechazar - El primero en responder`. Incluye fecha, operario y el JSON recibido en los detalles.
-4. Añade una condición: `Outcome` igual a `Approve`.
-5. En la rama de rechazo, obtén los elementos de la fecha y actualiza `Estado = Rechazado`.
-6. En la rama aprobada, continúa con la selección del archivo y la ejecución del script.
+5. Después de la respuesta, añade `Iniciar y esperar una aprobación`.
+6. Si se rechaza, conserva el JSON en `Borradores` para permitir correcciones.
+7. Si se aprueba, localiza el Excel mensual y ejecuta el Office Script.
+8. Después de escribir correctamente en Excel, mueve el JSON a `Consumos Planta/Procesados`.
 
-## 4. Seleccionar el Excel mensual
+## 7. Seleccionar el Excel mensual
 
-Los archivos deben llamarse exactamente `Datos_Planta_Mes_Año.xlsx`, por ejemplo `Datos_Planta_Agosto_2026.xlsx`.
+Inicializa una variable de matriz `Meses`:
 
-1. Inicializa una variable de matriz `Meses` con los doce meses en español, de enero a diciembre.
-2. Crea `Componer - Mes`:
-
-   ```text
-   variables('Meses')[sub(int(formatDateTime(triggerBody()?['fechaLectura'],'MM')),1)]
-   ```
-
-3. Crea `Componer - Nombre archivo`:
-
-   ```text
-   concat('Datos_Planta_',outputs('Componer_-_Mes'),'_',formatDateTime(triggerBody()?['fechaLectura'],'yyyy'),'.xlsx')
-   ```
-
-4. Usa `SharePoint > Obtener metadatos del archivo mediante la ruta` con la carpeta real de consumos y el nombre anterior.
-5. Añade `Excel Online (Empresa) > Ejecutar script`. Como archivo usa el `Identificador` obtenido por SharePoint.
-6. Selecciona `EscribirLecturasPlanta` y pasa:
-
-   | Parámetro | Valor |
-   |---|---|
-   | `fechaLectura` | `triggerBody()?['fechaLectura']` |
-   | `lecturasJson` | `triggerBody()?['lecturasJson']` |
-
-7. Si termina correctamente, actualiza los registros de la fecha a `Aprobado`. Configura la rama `Ejecutar después` de error para poner `Estado = Error` y avisar al responsable.
-
-## 5. Respuestas CORS y conexión de la app
-
-En las acciones `Respuesta`, añade:
-
-```text
-Access-Control-Allow-Origin: https://seguridadmasolcartagena-pixel.github.io
-Access-Control-Allow-Headers: Content-Type
-Access-Control-Allow-Methods: POST, OPTIONS
+```json
+["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
 ```
 
-Guarda el flujo, copia la URL del disparador y sustitúyela en `config.js`. La URL firmada puede verse desde el navegador; para producción debe restringirse el acceso a usuarios corporativos mediante Microsoft Entra ID o un proxy autenticado. Regenera la URL antigua que estaba publicada en el repositorio.
+Obtén el mes:
 
-## 6. Prueba de aceptación
+```text
+variables('Meses')[sub(int(formatDateTime(triggerBody()?['fechaLectura'],'MM')),1)]
+```
 
-1. Operario A abre una fecha, completa dos lecturas y espera `Borrador guardado en SharePoint`.
-2. Operario B abre la misma fecha en otro dispositivo y pulsa actualizar; debe ver ambas lecturas en verde.
-3. B completa otra lectura; A debe verla al actualizar.
-4. Verifica que el botón definitivo solo se habilita con 43 lecturas.
-5. Aprueba un envío de prueba y comprueba la hoja mensual y `Totales`.
-6. Prueba un salto viernes-lunes: la diferencia debe quedar dividida entre sábado, domingo y lunes.
-7. Prueba una lectura inferior a la anterior: el script debe rechazar toda la escritura.
+Construye el nombre según la nomenclatura real de la biblioteca. Para los archivos visibles actualmente, el ejemplo sería:
+
+```text
+concat('Datos-Planta-',outputs('Componer_-_Mes'),'-',formatDateTime(triggerBody()?['fechaLectura'],'yyyy'),'.xlsx')
+```
+
+Ejemplo:
+
+```text
+Datos-Planta-Agosto-2026.xlsx
+```
+
+Usa `Obtener metadatos del archivo mediante la ruta` y después `Excel Online (Empresa) > Ejecutar script`.
+
+Parámetros del script:
+
+| Parámetro | Valor |
+|---|---|
+| `fechaLectura` | `triggerBody()?['fechaLectura']` |
+| `lecturasJson` | `string(body('Analizar_JSON_-_Envio')?['lecturas'])` |
+
+El script está en `office-scripts/EscribirLecturasPlanta.ts`.
+
+## 8. Conectar la aplicación
+
+Guarda el flujo y copia la URL HTTP generada. Sustituye el marcador de `config.js`:
+
+```js
+window.MASOL_CONFIG = Object.freeze({
+  FLOW_URL: "URL_NUEVA_DEL_FLUJO",
+  AUTO_SAVE_DELAY_MS: 1400
+});
+```
+
+Regenera la URL antigua antes de producción. Una URL firmada incluida en una aplicación web puede ser inspeccionada desde el navegador.
+
+## 9. Prueba mínima
+
+1. El operario A introduce dos lecturas.
+2. Comprueba que se crea `Borrador_Lecturas_FECHA.json`.
+3. El operario B abre la misma fecha y debe recuperar ambas lecturas.
+4. B añade otra lectura y comprueba que el archivo contiene las tres.
+5. Completa las 43 lecturas y envía.
+6. Aprueba y confirma la escritura en el Excel y el traslado del JSON a `Procesados`.
+
+## Límite conocido
+
+El archivo completo se sustituye en cada guardado. Si dos operarios modifican exactamente la misma fecha al mismo tiempo, el último guardado puede imponerse al anterior. Para el trabajo secuencial descrito (primer operario y después segundo operario) el modelo es adecuado y mucho más sencillo que una lista por contador.
