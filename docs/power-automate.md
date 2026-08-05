@@ -1,6 +1,6 @@
 # Power Automate con borradores JSON en SharePoint
 
-La aplicación no escribe directamente en SharePoint ni en Excel. Solo envía y recibe JSON mediante un flujo HTTP. Power Automate es responsable de crear el borrador, devolverlo al segundo dispositivo, solicitar aprobación y ejecutar el Office Script.
+La aplicación no escribe directamente en SharePoint ni en Excel. Solo envía y recibe JSON mediante un flujo HTTP. Power Automate es responsable de crear el borrador, devolverlo al segundo dispositivo y ejecutar directamente el Office Script.
 
 ## 1. Crear las carpetas
 
@@ -170,13 +170,11 @@ La aplicación envía siempre el documento completo. El segundo operario primero
 4. Responde inmediatamente con código `202`:
 
    ```json
-   { "ok": true, "mensaje": "Lecturas enviadas a aprobación" }
+   { "ok": true, "mensaje": "Lecturas recibidas. Se está actualizando el Excel" }
    ```
 
-5. Después de la respuesta, añade `Iniciar y esperar una aprobación`.
-6. Si se rechaza, conserva el JSON en `Borradores` para permitir correcciones.
-7. Si se aprueba, localiza el Excel mensual y ejecuta el Office Script.
-8. Después de escribir correctamente en Excel, mueve el JSON a `Consumos Planta/Procesados`.
+5. Después de la respuesta, localiza el Excel mensual y ejecuta el Office Script.
+6. Después de escribir correctamente en Excel, mueve el JSON a `Consumos Planta/Procesados`.
 
 ## 7. Seleccionar el Excel mensual
 

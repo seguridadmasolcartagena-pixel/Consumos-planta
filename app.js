@@ -159,7 +159,7 @@ function updateProgress() {
   progressLabel.textContent = `${count} de ${READINGS.length} lecturas`;
   readyCount.textContent = count === 1 ? "1 lectura disponible" : `${count} lecturas disponibles`;
   submitButton.disabled = count !== READINGS.length || loadingDraft || saveInFlight;
-  submitButton.querySelector("span").textContent = count === READINGS.length ? "Enviar a aprobación" : `Faltan ${READINGS.length - count} lecturas`;
+  submitButton.querySelector("span").textContent = count === READINGS.length ? "Enviar lecturas" : `Faltan ${READINGS.length - count} lecturas`;
 }
 
 function updateDestination() {
@@ -319,8 +319,8 @@ async function submitReadings(event) {
     setButtonsBusy(true, "Enviando…");
     const draft = buildDraft("Enviado", readings);
     const result = await callFlow({ accion: "enviar", fechaLectura: dateInput.value, borradorJson: JSON.stringify(draft) });
-    showResult(true, "Lecturas enviadas", result.mensaje || "La solicitud se ha enviado a aprobación. El Excel se actualizará únicamente si se aprueba.");
-    setSharedState("submitted", "Envío registrado", "Las lecturas quedan bloqueadas por el proceso de aprobación.");
+    showResult(true, "Lecturas enviadas", result.mensaje || "Power Automate ha recibido las lecturas y está actualizando el Excel mensual.");
+    setSharedState("submitted", "Procesamiento iniciado", "Power Automate está escribiendo las lecturas en el Excel mensual.");
   } catch (error) {
     showToast(error.message || "No se pudo enviar la solicitud.");
     if (error instanceof TypeError) showResult(false, "No se pudo conectar", "El navegador no pudo comunicarse con Power Automate. Revisa la URL, CORS y la conexión.");
