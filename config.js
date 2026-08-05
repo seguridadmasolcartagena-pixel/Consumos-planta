@@ -1,0 +1,4 @@
+window.MASOL_CONFIG = Object.freeze({
+  FLOW_URL: "REEMPLAZAR_CON_LA_URL_DEL_FLUJO",
+  AUTO_SAVE_DELAY_MS: 1400
+});
