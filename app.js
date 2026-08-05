@@ -165,7 +165,7 @@ function updateProgress() {
 function updateDestination() {
   if (!dateInput.value) return void (sheetDestination.textContent = "Destino: hoja Mes Año");
   const [year, month] = dateInput.value.split("-");
-  sheetDestination.textContent = `Destino: Datos_Planta_${MONTHS[Number(month) - 1]}_${year}.xlsx · hoja ${MONTHS[Number(month) - 1]} ${year}`;
+  sheetDestination.textContent = `Destino: Datos-Planta-${MONTHS[Number(month) - 1]}-${year}.xlsx · hoja ${MONTHS[Number(month) - 1]} ${year}`;
 }
 
 function setSharedState(kind, title, detail) {
@@ -188,6 +188,14 @@ async function callFlow(payload) {
 
 function normalizeServerReadings(result) {
   let readings = result.lecturas || result.readings || [];
+  if (result.borradorJson) {
+    try {
+      const draft = typeof result.borradorJson === "string" ? JSON.parse(result.borradorJson) : result.borradorJson;
+      readings = draft.lecturas || [];
+    } catch {
+      readings = [];
+    }
+  }
   if (typeof readings === "string") {
     try { readings = JSON.parse(readings); } catch { readings = []; }
   }
@@ -225,7 +233,7 @@ async function loadSharedDraft() {
       input.closest(".reading-field").classList.add("shared");
     });
     const count = readings.length;
-    setSharedState("ready", count ? "Borrador compartido actualizado" : "No hay lecturas guardadas", count ? `${count} lecturas recuperadas de SharePoint. Puedes completar las restantes.` : "Empieza a introducir lecturas; se guardarán en SharePoint.");
+    setSharedState("ready", count ? "Borrador JSON actualizado" : "No hay lecturas guardadas", count ? `${count} lecturas recuperadas del archivo JSON. Puedes completar las restantes.` : "Empieza a introducir lecturas; Power Automate creará el archivo JSON.");
     draftLabel.textContent = count ? `${count} recuperadas de SharePoint` : "Sin cambios pendientes";
   } catch (error) {
     setSharedState("error", "No se pudo cargar SharePoint", error.message);
@@ -267,25 +275,25 @@ async function saveSharedDraft(showConfirmation = true) {
   if (saveInFlight) return false;
   if (!dateInput.value) throw new Error("Selecciona la fecha de lectura.");
   if (!operatorInput.value.trim()) { operatorInput.focus(); throw new Error("Introduce el nombre del operario antes de guardar."); }
-  const readings = collectReadings(true);
-  if (!readings.length) {
+  if (!dirtyColumns.size) {
     if (showConfirmation) showToast("No hay cambios nuevos que guardar.");
     return true;
   }
+  const readings = collectReadings(false);
   saveInFlight = true;
   setButtonsBusy(true, "Guardando…");
   draftLabel.textContent = "Guardando en SharePoint…";
   try {
-    const columnsSaved = new Set(readings.map((item) => item.ColumnaLectura));
-    const result = await callFlow({ accion: "guardar", fechaLectura: dateInput.value, operario: operatorInput.value.trim(), fechaHoraRegistro: new Date().toISOString(), dispositivo: deviceType(), lecturas: readings });
-    columnsSaved.forEach((column) => {
-      dirtyColumns.delete(column);
-      const input = document.querySelector(`[data-column="${column}"]`);
+    const draft = buildDraft("Borrador", readings);
+    const result = await callFlow({ accion: "guardar", fechaLectura: dateInput.value, borradorJson: JSON.stringify(draft) });
+    dirtyColumns.clear();
+    document.querySelectorAll("[data-column]").forEach((input) => {
+      if (!input.value.trim()) return;
       input.closest(".reading-field").classList.add("shared");
       input.dataset.updatedBy = operatorInput.value.trim();
     });
     draftLabel.textContent = "Borrador guardado en SharePoint";
-    setSharedState("ready", "Borrador compartido guardado", result.mensaje || `${readings.length} lecturas disponibles para el otro operario.`);
+    setSharedState("ready", "Archivo JSON guardado", result.mensaje || `${readings.length} lecturas disponibles para el otro operario.`);
     if (showConfirmation) showToast("Borrador guardado en SharePoint.");
     return true;
   } catch (error) {
@@ -309,7 +317,8 @@ async function submitReadings(event) {
     const readings = collectReadings(false);
     if (readings.length !== READINGS.length) throw new Error(`Faltan ${READINGS.length - readings.length} lecturas antes del envío definitivo.`);
     setButtonsBusy(true, "Enviando…");
-    const result = await callFlow({ accion: "enviar", fechaLectura: dateInput.value, horaLectura: "08:00", operario: operatorInput.value.trim(), fechaHoraRegistro: new Date().toISOString(), dispositivo: { tipo: deviceType(), anchoPantalla: window.innerWidth, altoPantalla: window.innerHeight, navegador: navigator.userAgent }, lecturas: readings, lecturasJson: JSON.stringify(readings) });
+    const draft = buildDraft("Enviado", readings);
+    const result = await callFlow({ accion: "enviar", fechaLectura: dateInput.value, borradorJson: JSON.stringify(draft) });
     showResult(true, "Lecturas enviadas", result.mensaje || "La solicitud se ha enviado a aprobación. El Excel se actualizará únicamente si se aprueba.");
     setSharedState("submitted", "Envío registrado", "Las lecturas quedan bloqueadas por el proceso de aprobación.");
   } catch (error) {
@@ -319,6 +328,24 @@ async function submitReadings(event) {
     setButtonsBusy(false);
     updateProgress();
   }
+}
+
+function buildDraft(estado, readings) {
+  return {
+    version: 1,
+    fechaLectura: dateInput.value,
+    horaLectura: "08:00",
+    estado,
+    actualizadoPor: operatorInput.value.trim(),
+    actualizadoEn: new Date().toISOString(),
+    dispositivo: {
+      tipo: deviceType(),
+      anchoPantalla: window.innerWidth,
+      altoPantalla: window.innerHeight,
+      navegador: navigator.userAgent
+    },
+    lecturas: readings
+  };
 }
 
 function setButtonsBusy(active, label) {
