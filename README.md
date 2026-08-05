@@ -2,7 +2,7 @@
 
 PWA para registrar de forma compartida las lecturas diarias de consumos de Masol Cartagena. Dos operarios pueden completar la misma fecha desde dispositivos distintos: Power Automate guarda un archivo JSON por fecha en SharePoint y el segundo dispositivo recupera los valores ya introducidos.
 
-El envío definitivo solo se habilita al completar las 43 lecturas. Power Automate ejecuta directamente un Office Script sobre `Datos-Planta-Mes-Año.xlsx`. El script escribe en la hoja `Mes Año`, calcula los consumos en `Totales` y reparte una diferencia entre todos los días sin lectura.
+El envío definitivo solo se habilita al completar las 43 lecturas. Power Automate ejecuta directamente un Office Script sobre `Datos-Planta-Mes-Año.xlsx`. El script localiza la fecha y escribe las lecturas únicamente en la hoja `Mes Año`.
 
 ## Configuración
 
