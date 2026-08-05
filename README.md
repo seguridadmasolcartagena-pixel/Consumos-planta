@@ -1,26 +1,24 @@
 # Lecturas de planta
 
-Aplicación web instalable para registrar las lecturas diarias de consumos de Masol Cartagena. Envía las lecturas a Power Automate, donde siguen el circuito de aprobación y escritura en el Excel mensual de SharePoint.
+PWA para registrar de forma compartida las lecturas diarias de consumos de Masol Cartagena. Dos operarios pueden completar la misma fecha desde dispositivos distintos: cada cambio se guarda mediante Power Automate en una lista temporal de SharePoint y el segundo dispositivo recupera los valores ya introducidos.
 
-El formulario sigue el orden físico de la hoja `Mes Año` de `Plantilla_Consumos_Planta.xlsx`: Producción (`B:R`), Mantenimiento eléctrico (`S:AB`) y Mantenimiento/servicios (`AC:AR`). Las columnas de `Totales` se conservan en el mapa enviado al flujo.
+El envío definitivo solo se habilita al completar las 43 lecturas. Power Automate solicita aprobación y, si se aprueba, ejecuta un Office Script sobre `Datos_Planta_Mes_Año.xlsx`. El script escribe en la hoja `Mes Año`, calcula los consumos en `Totales` y reparte una diferencia entre todos los días sin lectura.
 
-## Publicación
+## Configuración
 
-El flujo de GitHub Actions publica automáticamente la rama `main` mediante GitHub Pages. En la configuración del repositorio, `Settings > Pages > Build and deployment` debe estar seleccionado `GitHub Actions`.
+1. Sigue [docs/power-automate.md](docs/power-automate.md) para crear la lista, el flujo y el Office Script.
+2. Copia la URL del disparador HTTP en `config.js`.
+3. Publica la rama `main` con GitHub Pages.
 
-## Trazabilidad y dispositivos
+La aplicación no guarda lecturas en el dispositivo. Solo recuerda el nombre del operario; las medidas viven en SharePoint hasta su aprobación.
 
-Cada envio incluye el nombre y correo corporativo del operario, la fecha y hora real del registro y datos basicos del dispositivo (movil, tableta o escritorio, dimensiones y navegador). La identidad se recuerda localmente en cada dispositivo.
+## Archivos principales
 
-El formulario adapta sus columnas y controles a escritorio, tableta y movil. Para validar automaticamente la identidad corporativa sin permitir nombres manuales sera necesario integrar Microsoft Entra ID.
+- `app.js`: captura, carga y guardado compartido, validación y envío JSON.
+- `config.js`: URL del flujo y retardo del guardado automático.
+- `office-scripts/EscribirLecturasPlanta.ts`: escritura y reparto de consumos.
+- `docs/power-automate.md`: guía completa de implementación y pruebas.
 
-## Prueba
+## Seguridad
 
-1. Seleccionar una fecha existente en la hoja mensual.
-2. Introducir el nombre, el correo corporativo y una o mas lecturas controladas.
-3. Enviar a aprobación.
-4. Comprobar la ejecución en Power Automate antes de aprobarla.
-
-## Configuración temporal
-
-La URL del disparador HTTP está configurada en `app.js` para la fase de prueba. Antes de utilizar la aplicación con datos reales se debe regenerar la firma del flujo y proteger el disparador.
+No reutilices la firma HTTP que estuvo publicada anteriormente. Regenera el disparador y limita el acceso a usuarios corporativos antes de usar datos reales. Una URL firmada dentro de una web estática no debe considerarse un secreto.
