@@ -13,6 +13,9 @@ interface ResultadoScript {
   hojaLecturas: string;
   filaLecturas: number;
   lecturasEscritas: number;
+  codigo?: string;
+  mensaje?: string;
+  errores?: string[];
 }
 
 const MESES = [
@@ -50,7 +53,15 @@ function main(workbook: ExcelScript.Workbook, fechaLectura: string, lecturasJson
   }
 
   if (errores.length) {
-    throw new Error(`Validación rechazada:\n${errores.join("\n")}`);
+    return {
+      ok: false,
+      hojaLecturas: hojaNombre,
+      filaLecturas: fila + 1,
+      lecturasEscritas: 0,
+      codigo: "LECTURA_MENOR_DIA_ANTERIOR",
+      mensaje: "No se pueden introducir medidas menores a las del día anterior.",
+      errores
+    };
   }
 
   for (const lectura of lecturas) {
@@ -61,7 +72,8 @@ function main(workbook: ExcelScript.Workbook, fechaLectura: string, lecturasJson
     ok: true,
     hojaLecturas: hojaNombre,
     filaLecturas: fila + 1,
-    lecturasEscritas: lecturas.length
+    lecturasEscritas: lecturas.length,
+    mensaje: "Lecturas escritas correctamente."
   };
 }
 
