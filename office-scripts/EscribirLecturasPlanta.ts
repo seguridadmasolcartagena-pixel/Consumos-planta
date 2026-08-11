@@ -33,17 +33,31 @@ function main(workbook: ExcelScript.Workbook, fechaLectura: string, lecturasJson
     throw new Error(`Se esperaban 43 lecturas y se recibieron ${lecturas.length}.`);
   }
 
-  const fila = getDateRows(hoja).get(fechaLectura);
-  if (fila === undefined) {
+  const used = hoja.getUsedRange(true);
+  if (!used) throw new Error(`La hoja '${hojaNombre}' no contiene datos.`);
+
+  const firstRow = used.getRowIndex();
+  const firstColumn = used.getColumnIndex();
+  const values = used.getValues();
+  const dateOffset = -firstColumn;
+  if (dateOffset < 0 || dateOffset >= used.getColumnCount()) {
+    throw new Error(`La columna A no forma parte del rango usado de '${hojaNombre}'.`);
+  }
+
+  const rowOffset = values.findIndex((row) => cellToIsoDate(row[dateOffset]) === fechaLectura);
+  if (rowOffset < 0) {
     throw new Error(`No se encontró ${fechaLectura} en la columna A de '${hojaNombre}'.`);
   }
+
+  const fila = firstRow + rowOffset;
 
   const errores: string[] = [];
   for (const lectura of lecturas) {
     validateReading(lectura);
     if (lectura.TipoValidacion === "LecturaDirecta") continue;
 
-    const anterior = findPreviousReading(hoja, lectura.ColumnaLectura, fila);
+    const columnIndex = columnToIndex(lectura.ColumnaLectura);
+    const anterior = findPreviousReading(values, firstColumn, columnIndex, rowOffset);
     if (anterior !== null && lectura.Valor < anterior) {
       errores.push(`${lectura.NombreCampo}: ${lectura.Valor} es menor que la lectura anterior ${anterior}.`);
     }
@@ -53,9 +67,22 @@ function main(workbook: ExcelScript.Workbook, fechaLectura: string, lecturasJson
     throw new Error(`Validación rechazada:\n${errores.join("\n")}`);
   }
 
+  const rowValues: (string | number | boolean)[][] = [Array<string | number | boolean>(43).fill("")];
+  const usedColumns = new Set<number>();
   for (const lectura of lecturas) {
-    hoja.getRange(`${lectura.ColumnaLectura}${fila + 1}`).setValue(lectura.Valor);
+    const columnIndex = columnToIndex(lectura.ColumnaLectura);
+    const outputOffset = columnIndex - 1;
+    if (outputOffset < 0 || outputOffset >= 43) {
+      throw new Error(`La columna ${lectura.ColumnaLectura} está fuera del rango B:AR.`);
+    }
+    if (usedColumns.has(columnIndex)) {
+      throw new Error(`La columna ${lectura.ColumnaLectura} está repetida en el JSON.`);
+    }
+    usedColumns.add(columnIndex);
+    rowValues[0][outputOffset] = lectura.Valor;
   }
+
+  hoja.getRangeByIndexes(fila, 1, 1, 43).setValues(rowValues);
 
   return {
     ok: true,
@@ -79,28 +106,28 @@ function validateReading(lectura: Lectura): void {
   }
 }
 
-function getDateRows(sheet: ExcelScript.Worksheet): Map<string, number> {
-  const used = sheet.getUsedRange(true);
-  if (!used) return new Map<string, number>();
+function findPreviousReading(
+  values: (string | number | boolean)[][],
+  firstColumn: number,
+  columnIndex: number,
+  currentRowOffset: number
+): number | null {
+  const columnOffset = columnIndex - firstColumn;
+  if (columnOffset < 0 || columnOffset >= values[0].length) return null;
 
-  const firstRow = used.getRowIndex();
-  const rowCount = used.getRowCount();
-  const values = sheet.getRangeByIndexes(firstRow, 0, rowCount, 1).getValues();
-  const result = new Map<string, number>();
-
-  values.forEach((row, index) => {
-    const key = cellToIsoDate(row[0]);
-    if (key) result.set(key, firstRow + index);
-  });
-  return result;
-}
-
-function findPreviousReading(sheet: ExcelScript.Worksheet, column: string, currentRow: number): number | null {
-  for (let row = currentRow - 1; row >= 0; row -= 1) {
-    const value = toNumber(sheet.getRange(`${column}${row + 1}`).getValue());
+  for (let row = currentRowOffset - 1; row >= 0; row -= 1) {
+    const value = toNumber(values[row][columnOffset]);
     if (value !== null) return value;
   }
   return null;
+}
+
+function columnToIndex(column: string): number {
+  let result = 0;
+  for (const character of column) {
+    result = result * 26 + character.charCodeAt(0) - 64;
+  }
+  return result - 1;
 }
 
 function toNumber(value: string | number | boolean): number | null {
