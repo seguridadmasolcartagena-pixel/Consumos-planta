@@ -191,7 +191,10 @@ function normalizeServerReadings(result) {
   if (result.borradorJson) {
     try {
       const draft = typeof result.borradorJson === "string" ? JSON.parse(result.borradorJson) : result.borradorJson;
-      readings = draft.lecturas || [];
+      readings = (draft.lecturas || []).map((item) => ({
+        ...item,
+        Operario: item.Operario || item.operario || draft.actualizadoPor || ""
+      }));
     } catch {
       readings = [];
     }
@@ -260,7 +263,10 @@ function collectReadings(onlyDirty = false) {
     const input = document.querySelector(`[data-column="${item.ColumnaLectura}"]`);
     if (!input.value.trim()) continue;
     if (!validateInput(input)) { firstInvalid ||= input; continue; }
-    result.push({ Orden: item.Orden, Bloque: item.Bloque, NombreCampo: item.NombreCampo, ColumnaLectura: item.ColumnaLectura, ColumnaTotales: item.ColumnaTotales, TipoValidacion: item.TipoValidacion, Valor: parseNumber(input.value) });
+    const operario = dirtyColumns.has(item.ColumnaLectura)
+      ? operatorInput.value.trim()
+      : input.dataset.updatedBy || operatorInput.value.trim();
+    result.push({ Orden: item.Orden, Bloque: item.Bloque, NombreCampo: item.NombreCampo, ColumnaLectura: item.ColumnaLectura, ColumnaTotales: item.ColumnaTotales, TipoValidacion: item.TipoValidacion, Valor: parseNumber(input.value), Operario: operario });
   }
   if (firstInvalid) {
     firstInvalid.closest("details").open = true;
@@ -284,13 +290,14 @@ async function saveSharedDraft(showConfirmation = true) {
   setButtonsBusy(true, "Guardando…");
   draftLabel.textContent = "Guardando en SharePoint…";
   try {
+    const changedColumns = new Set(dirtyColumns);
     const draft = buildDraft("Borrador", readings);
     const result = await callFlow({ accion: "guardar", fechaLectura: dateInput.value, borradorJson: JSON.stringify(draft) });
     dirtyColumns.clear();
     document.querySelectorAll("[data-column]").forEach((input) => {
       if (!input.value.trim()) return;
       input.closest(".reading-field").classList.add("shared");
-      input.dataset.updatedBy = operatorInput.value.trim();
+      if (changedColumns.has(input.dataset.column)) input.dataset.updatedBy = operatorInput.value.trim();
     });
     draftLabel.textContent = "Borrador guardado en SharePoint";
     setSharedState("ready", "Archivo JSON guardado", result.mensaje || `${readings.length} lecturas disponibles para el otro operario.`);
@@ -331,12 +338,14 @@ async function submitReadings(event) {
 }
 
 function buildDraft(estado, readings) {
+  const operarios = [...new Set(readings.map((reading) => reading.Operario).filter(Boolean))];
   return {
     version: 1,
     fechaLectura: dateInput.value,
     horaLectura: "08:00",
     estado,
     actualizadoPor: operatorInput.value.trim(),
+    operarios,
     actualizadoEn: new Date().toISOString(),
     dispositivo: {
       tipo: deviceType(),
