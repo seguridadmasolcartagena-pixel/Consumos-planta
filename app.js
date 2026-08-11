@@ -1,6 +1,7 @@
 const CONFIG = window.MASOL_CONFIG || {};
 const FLOW_URL = CONFIG.FLOW_URL || "";
 const AUTO_SAVE_DELAY_MS = Number(CONFIG.AUTO_SAVE_DELAY_MS) || 1400;
+const MAX_PREVIOUS_LOOKBACK_DAYS = 10;
 const OPERATOR_KEY = "masol-consumos-planta-operator-v2";
 const MONTHS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
@@ -85,6 +86,8 @@ let saveTimer;
 let saveInFlight = false;
 let loadingDraft = false;
 const dirtyColumns = new Set();
+const previousReadings = new Map();
+let previousReadingDate = "";
 
 function reading(Orden, group, NombreCampo, ColumnaLectura, ColumnaTotales, TipoValidacion, limits = {}) {
   return { Orden, group, Bloque: group === "produccion" ? "PRODUCCION L a D" : "MANTENIMIENTO L a V", NombreCampo, ColumnaLectura, ColumnaTotales, TipoValidacion, ...limits };
@@ -134,14 +137,24 @@ function validateInput(input) {
   const value = input.value.trim();
   input.classList.remove("invalid");
   input.removeAttribute("aria-invalid");
+  delete input.dataset.validationMessage;
   if (!value) return true;
   const number = parseNumber(value);
   const min = input.dataset.min === undefined ? null : Number(input.dataset.min);
   const max = input.dataset.max === undefined ? null : Number(input.dataset.max);
-  const valid = number !== null && (min === null || number >= min) && (max === null || number <= max);
+  const readingDefinition = READINGS.find((item) => item.ColumnaLectura === input.dataset.column);
+  const previous = previousReadings.get(input.dataset.column);
+  const validatesTotalizer = readingDefinition && readingDefinition.TipoValidacion !== "LecturaDirecta";
+  const valid = number !== null
+    && (min === null || number >= min)
+    && (max === null || number <= max)
+    && (!validatesTotalizer || previous === undefined || number >= previous);
   if (!valid) {
     input.classList.add("invalid");
     input.setAttribute("aria-invalid", "true");
+    input.dataset.validationMessage = validatesTotalizer && previous !== undefined && number !== null && number < previous
+      ? `${readingDefinition.NombreCampo}: ${number} no puede ser menor que la lectura anterior ${previous} (${formatSpanishDate(previousReadingDate)}).`
+      : "Solo se admiten números positivos dentro del rango permitido.";
   }
   return valid;
 }
@@ -235,8 +248,11 @@ async function loadSharedDraft() {
       input.dataset.updatedBy = item.Operario || item.operario || "otro operario";
       input.closest(".reading-field").classList.add("shared");
     });
+    await loadPreviousReadings();
+    document.querySelectorAll("[data-column]").forEach((input) => validateInput(input));
     const count = readings.length;
-    setSharedState("ready", count ? "Borrador JSON actualizado" : "No hay lecturas guardadas", count ? `${count} lecturas recuperadas del archivo JSON. Puedes completar las restantes.` : "Empieza a introducir lecturas; Power Automate creará el archivo JSON.");
+    const previousDetail = previousReadingDate ? ` Referencia anterior: ${formatSpanishDate(previousReadingDate)}.` : "";
+    setSharedState("ready", count ? "Borrador JSON actualizado" : "No hay lecturas guardadas", (count ? `${count} lecturas recuperadas del archivo JSON. Puedes completar las restantes.` : "Empieza a introducir lecturas; Power Automate creará el archivo JSON.") + previousDetail);
     draftLabel.textContent = count ? `${count} recuperadas de SharePoint` : "Sin cambios pendientes";
   } catch (error) {
     setSharedState("error", "No se pudo cargar SharePoint", error.message);
@@ -246,6 +262,51 @@ async function loadSharedDraft() {
     setFormDisabled(false);
     updateProgress();
   }
+}
+
+async function loadPreviousReadings() {
+  previousReadings.clear();
+  previousReadingDate = "";
+  document.querySelectorAll("[data-column]").forEach((input) => {
+    delete input.dataset.previousValue;
+    input.removeAttribute("title");
+  });
+
+  for (let daysBack = 1; daysBack <= MAX_PREVIOUS_LOOKBACK_DAYS; daysBack += 1) {
+    const candidateDate = shiftIsoDate(dateInput.value, -daysBack);
+    let readings = [];
+    for (const origen of ["procesados", "borradores"]) {
+      const result = await callFlow({ accion: "cargar", fechaLectura: candidateDate, origen });
+      readings = normalizeServerReadings(result);
+      if (readings.length) break;
+    }
+    if (!readings.length) continue;
+
+    previousReadingDate = candidateDate;
+    readings.forEach((reading) => {
+      const column = reading.ColumnaLectura || reading.columna || reading.Columna;
+      const value = reading.Valor ?? reading.valor ?? reading.Value;
+      if (!column || typeof Number(value) !== "number" || !Number.isFinite(Number(value))) return;
+      previousReadings.set(column, Number(value));
+      const input = document.querySelector(`[data-column="${column}"]`);
+      if (input) {
+        input.dataset.previousValue = String(value);
+        input.title = `Lectura anterior: ${value} (${formatSpanishDate(candidateDate)})`;
+      }
+    });
+    break;
+  }
+}
+
+function shiftIsoDate(value, days) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatSpanishDate(value) {
+  const [year, month, day] = value.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 function queueSharedSave() {
@@ -271,7 +332,7 @@ function collectReadings(onlyDirty = false) {
   if (firstInvalid) {
     firstInvalid.closest("details").open = true;
     firstInvalid.focus();
-    throw new Error("Revisa los valores marcados. Solo se admiten números positivos y decimales.");
+    throw new Error(firstInvalid.dataset.validationMessage || "Revisa los valores marcados.");
   }
   return result;
 }
@@ -419,6 +480,12 @@ function initialize() {
       if (dirtyColumns.size) queueSharedSave();
     }
     updateProgress();
+  });
+  form.addEventListener("focusout", (event) => {
+    if (!event.target.matches("[data-column]")) return;
+    if (!validateInput(event.target) && event.target.dataset.validationMessage) {
+      showToast(event.target.dataset.validationMessage);
+    }
   });
   dateInput.addEventListener("change", () => { updateDestination(); loadSharedDraft(); });
   form.addEventListener("submit", submitReadings);
