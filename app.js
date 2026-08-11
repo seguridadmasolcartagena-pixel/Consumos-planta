@@ -274,8 +274,12 @@ async function loadPreviousReadings() {
 
   for (let daysBack = 1; daysBack <= MAX_PREVIOUS_LOOKBACK_DAYS; daysBack += 1) {
     const candidateDate = shiftIsoDate(dateInput.value, -daysBack);
-    const result = await callFlow({ accion: "cargar", fechaLectura: candidateDate, origen: "procesados" });
-    const readings = normalizeServerReadings(result);
+    let readings = [];
+    for (const origen of ["procesados", "borradores"]) {
+      const result = await callFlow({ accion: "cargar", fechaLectura: candidateDate, origen });
+      readings = normalizeServerReadings(result);
+      if (readings.length) break;
+    }
     if (!readings.length) continue;
 
     previousReadingDate = candidateDate;
