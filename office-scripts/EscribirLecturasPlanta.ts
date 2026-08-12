@@ -30,10 +30,12 @@ const COLUMNAS_OBLIGATORIAS = [
   "AF", "AG", "AH", "AI", "AJ", "AK", "AL", "AM", "AN", "AO", "AP", "AQ"
 ];
 const TOTAL_COLUMNAS_HASTA_AR = 44;
+const MAX_FILAS_BUSQUEDA = 366;
 
 /** Escribe las lecturas recibidas en la fila de la fecha dentro de la hoja Mes Año. */
 function main(workbook: ExcelScript.Workbook, fechaLectura: string, lecturasJson: string): ResultadoScript {
-  const fecha = parseIsoDate(fechaLectura);
+  const fechaIso = normalizeDate(fechaLectura);
+  const fecha = parseIsoDate(fechaIso);
   const hojaNombre = `${MESES[fecha.getUTCMonth()]} ${fecha.getUTCFullYear()}`;
   const hoja = workbook.getWorksheet(hojaNombre);
   if (!hoja) throw new Error(`No existe la hoja '${hojaNombre}'.`);
@@ -43,16 +45,15 @@ function main(workbook: ExcelScript.Workbook, fechaLectura: string, lecturasJson
     throw new Error(`Se esperaban entre ${COLUMNAS_OBLIGATORIAS.length} y 43 lecturas y se recibieron ${lecturas.length}.`);
   }
 
-  const used = hoja.getUsedRange(true);
-  if (!used) throw new Error(`La hoja '${hojaNombre}' está vacía.`);
-  const primeraFilaUsada = used.getRowIndex();
-  const valores = hoja.getRangeByIndexes(primeraFilaUsada, 0, used.getRowCount(), TOTAL_COLUMNAS_HASTA_AR).getValues();
-  const filaRelativa = findDateRow(valores, fechaLectura);
-  if (filaRelativa === -1) throw new Error(`No se encontró ${fechaLectura} en la columna A de '${hojaNombre}'.`);
+  // Una hoja con formato aplicado a columnas completas puede tener un UsedRange enorme.
+  // Limitamos la lectura a 366 filas, más que suficiente para una hoja mensual.
+  const fechas = hoja.getRangeByIndexes(0, 0, MAX_FILAS_BUSQUEDA, 1).getValues();
+  const filaExcel0 = findDateRow(fechas, fechaIso);
+  if (filaExcel0 === -1) throw new Error(`No se encontró ${formatSpanishDate(fechaIso)} en la columna A de '${hojaNombre}'.`);
 
-  const filaExcel0 = primeraFilaUsada + filaRelativa;
+  const valores = hoja.getRangeByIndexes(0, 0, filaExcel0 + 1, TOTAL_COLUMNAS_HASTA_AR).getValues();
   const errores: string[] = [];
-  const valoresPorColumna = new Map<number, number>();
+  const valoresPorColumna: { columna: number; valor: number }[] = [];
   const letrasRecibidas = new Set<string>();
 
   for (const lectura of lecturas) {
@@ -61,10 +62,10 @@ function main(workbook: ExcelScript.Workbook, fechaLectura: string, lecturasJson
     if (indice < 1 || indice > 43) throw new Error(`La columna ${lectura.ColumnaLectura} está fuera del rango B:AR.`);
     if (letrasRecibidas.has(lectura.ColumnaLectura)) throw new Error(`La columna ${lectura.ColumnaLectura} está repetida.`);
     letrasRecibidas.add(lectura.ColumnaLectura);
-    valoresPorColumna.set(indice, lectura.Valor);
+    valoresPorColumna.push({ columna: indice, valor: lectura.Valor });
 
     if (lectura.TipoValidacion !== "LecturaDirecta") {
-      const anterior = findPreviousReadingInMemory(valores, filaRelativa, indice);
+      const anterior = findPreviousReadingInMemory(valores, filaExcel0, indice);
       if (anterior !== null && lectura.Valor < anterior) {
         errores.push(`${lectura.NombreCampo}: ${lectura.Valor} es menor que la lectura anterior ${anterior}.`);
       }
@@ -92,13 +93,13 @@ function main(workbook: ExcelScript.Workbook, fechaLectura: string, lecturasJson
   }
 
   // Escribe únicamente las columnas recibidas. Las opcionales vacías no se modifican.
-  const ordenadas = [...valoresPorColumna.entries()].sort((a, b) => a[0] - b[0]);
+  const ordenadas = valoresPorColumna.sort((a, b) => a.columna - b.columna);
   let inicio = 0;
   while (inicio < ordenadas.length) {
     let fin = inicio;
-    while (fin + 1 < ordenadas.length && ordenadas[fin + 1][0] === ordenadas[fin][0] + 1) fin += 1;
-    const columnaInicial = ordenadas[inicio][0];
-    const valoresBloque = ordenadas.slice(inicio, fin + 1).map((entry) => entry[1]);
+    while (fin + 1 < ordenadas.length && ordenadas[fin + 1].columna === ordenadas[fin].columna + 1) fin += 1;
+    const columnaInicial = ordenadas[inicio].columna;
+    const valoresBloque = ordenadas.slice(inicio, fin + 1).map((entry) => entry.valor);
     hoja.getRangeByIndexes(filaExcel0, columnaInicial, 1, valoresBloque.length).setValues([valoresBloque]);
     inicio = fin + 1;
   }
@@ -113,13 +114,17 @@ function main(workbook: ExcelScript.Workbook, fechaLectura: string, lecturasJson
 }
 
 function parseLecturas(json: string): Lectura[] {
-  const parsed = JSON.parse(json) as Lectura[];
-  return Array.isArray(parsed) ? parsed : [];
+  const parsed = JSON.parse(String(json).trim()) as Lectura[] | { lecturas?: Lectura[] };
+  if (Array.isArray(parsed)) return parsed;
+  return parsed && Array.isArray(parsed.lecturas) ? parsed.lecturas : [];
 }
 
 function validateReading(lectura: Lectura): void {
   if (!lectura.ColumnaLectura || !/^[A-Z]{1,2}$/.test(lectura.ColumnaLectura)) throw new Error(`Columna no válida: ${lectura.ColumnaLectura}.`);
   if (typeof lectura.Valor !== "number" || !Number.isFinite(lectura.Valor) || lectura.Valor < 0) throw new Error(`Valor no válido para ${lectura.NombreCampo}.`);
+  if (lectura.ColumnaLectura === "R" && lectura.Valor > 100) {
+    throw new Error(`Nivel O2 (%): ${lectura.Valor} está fuera del intervalo permitido de 0 a 100.`);
+  }
 }
 
 function findDateRow(values: (string | number | boolean)[][], fecha: string): number {
@@ -163,6 +168,26 @@ function parseIsoDate(value: string): Date {
   const date = new Date(`${value}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) throw new Error(`Fecha no válida: ${value}.`);
   return date;
+}
+
+function normalizeDate(value: string): string {
+  const text = String(value).trim();
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
+  const spanish = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/.exec(text);
+  const normalized = iso
+    ? `${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`
+    : spanish
+      ? `${spanish[3]}-${spanish[2].padStart(2, "0")}-${spanish[1].padStart(2, "0")}`
+      : "";
+  if (!normalized) throw new Error(`Fecha no válida: ${text}. Usa DD/MM/AAAA o AAAA-MM-DD.`);
+  const date = parseIsoDate(normalized);
+  if (isoFromDate(date) !== normalized) throw new Error(`La fecha ${text} no existe.`);
+  return normalized;
+}
+
+function formatSpanishDate(value: string): string {
+  const parts = value.split("-");
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
 function isoFromDate(date: Date): string {
