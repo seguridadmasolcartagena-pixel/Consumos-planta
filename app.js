@@ -316,12 +316,12 @@ function formatSpanishDate(value) {
   return `${day}/${month}/${year}`;
 }
 
-function updateReadingAuthor(input, pending = false) {
+function updateReadingAuthor(input) {
   const author = input.dataset.updatedBy || "";
   const label = document.querySelector(`[data-author-for="${input.dataset.column}"]`);
   if (!label) return;
   label.hidden = !author || !input.value.trim();
-  label.textContent = label.hidden ? "" : `${pending ? "Pendiente de guardar por" : "Introducida por"}: ${author}`;
+  label.textContent = label.hidden ? "" : `Introducida por: ${author}`;
 }
 
 function queueSharedSave() {
@@ -491,7 +491,7 @@ function initialize() {
       validateInput(event.target);
       event.target.closest(".reading-field").classList.remove("shared");
       event.target.dataset.updatedBy = operatorInput.value.trim();
-      updateReadingAuthor(event.target, true);
+      updateReadingAuthor(event.target);
       dirtyColumns.add(event.target.dataset.column);
       queueSharedSave();
     }
