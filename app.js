@@ -120,6 +120,7 @@ function renderSections() {
           <input id="reading-${item.ColumnaLectura}" name="reading-${item.ColumnaLectura}" type="text" inputmode="decimal" autocomplete="off" aria-label="${item.NombreCampo}" data-column="${item.ColumnaLectura}" ${item.min !== undefined ? `data-min="${item.min}"` : "data-min=\"0\""} ${item.max !== undefined ? `data-max="${item.max}"` : ""} />
           <i class="input-status" data-lucide="check-circle-2" aria-hidden="true"></i>
         </span>
+        <small class="reading-author" data-author-for="${item.ColumnaLectura}" hidden></small>
       </label>`).join("");
     return `<details class="reading-section" data-group="${group.id}" ${index === 0 ? "open" : ""}>
       <summary><span class="section-index">0${index + 1}</span><span class="section-title"><span><strong>${group.label}</strong><small>${group.detail}</small></span></span><span class="section-count" data-group-count="${group.id}">0 / ${fields.length}</span><i class="section-chevron" data-lucide="chevron-down" aria-hidden="true"></i></summary>
@@ -252,6 +253,7 @@ async function loadSharedDraft() {
       input.value = String(value);
       input.dataset.updatedBy = item.Operario || item.operario || "otro operario";
       input.closest(".reading-field").classList.add("shared");
+      updateReadingAuthor(input);
     });
     await loadPreviousReadings();
     document.querySelectorAll("[data-column]").forEach((input) => validateInput(input));
@@ -314,6 +316,14 @@ function formatSpanishDate(value) {
   return `${day}/${month}/${year}`;
 }
 
+function updateReadingAuthor(input, pending = false) {
+  const author = input.dataset.updatedBy || "";
+  const label = document.querySelector(`[data-author-for="${input.dataset.column}"]`);
+  if (!label) return;
+  label.hidden = !author || !input.value.trim();
+  label.textContent = label.hidden ? "" : `${pending ? "Pendiente de guardar por" : "Introducida por"}: ${author}`;
+}
+
 function queueSharedSave() {
   clearTimeout(saveTimer);
   draftLabel.textContent = "Cambios pendientes…";
@@ -364,6 +374,7 @@ async function saveSharedDraft(showConfirmation = true) {
       if (!input.value.trim()) return;
       input.closest(".reading-field").classList.add("shared");
       if (changedColumns.has(input.dataset.column)) input.dataset.updatedBy = operatorInput.value.trim();
+      updateReadingAuthor(input);
     });
     draftLabel.textContent = "Borrador guardado en SharePoint";
     setSharedState("ready", "Archivo JSON guardado", result.mensaje || `${readings.length} lecturas disponibles para el otro operario.`);
@@ -479,6 +490,8 @@ function initialize() {
     if (event.target.matches("[data-column]")) {
       validateInput(event.target);
       event.target.closest(".reading-field").classList.remove("shared");
+      event.target.dataset.updatedBy = operatorInput.value.trim();
+      updateReadingAuthor(event.target, true);
       dirtyColumns.add(event.target.dataset.column);
       queueSharedSave();
     }
