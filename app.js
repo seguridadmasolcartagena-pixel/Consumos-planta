@@ -4,6 +4,7 @@ const AUTO_SAVE_DELAY_MS = Number(CONFIG.AUTO_SAVE_DELAY_MS) || 1400;
 const MAX_PREVIOUS_LOOKBACK_DAYS = 10;
 const OPERATOR_KEY = "masol-consumos-planta-operator-v2";
 const MONTHS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+const OPTIONAL_COLUMNS = new Set(["E", "F", "I", "N", "O", "AR"]);
 
 const GROUPS = [
   { id: "produccion", label: "Producción", detail: "Lecturas de proceso · lunes a domingo" },
@@ -56,6 +57,7 @@ const READINGS = [
   reading(41, "servicios", "Ampliación 90.LVB.10 / Contador vehículos", "AP", "AS", "Totalizador"),
   reading(42, "servicios", "Contador EDARI", "AQ", "AQ", "Totalizador")
 ].sort((a, b) => a.Orden - b.Orden);
+const REQUIRED_READINGS = READINGS.filter((item) => !OPTIONAL_COLUMNS.has(item.ColumnaLectura));
 
 const form = document.querySelector("#readingsForm");
 const sectionsContainer = document.querySelector("#readingsSections");
@@ -113,7 +115,7 @@ function renderSections() {
     const fields = READINGS.filter((item) => item.group === group.id);
     const fieldMarkup = fields.map((item) => `
       <label class="field reading-field" data-field="${item.ColumnaLectura}">
-        <span class="label-line"><span>${item.NombreCampo}</span><span class="column-code" title="Columna Excel ${item.ColumnaLectura}">${item.ColumnaLectura}</span></span>
+        <span class="label-line"><span>${item.NombreCampo}${OPTIONAL_COLUMNS.has(item.ColumnaLectura) ? " · Opcional" : ""}</span><span class="column-code" title="Columna Excel ${item.ColumnaLectura}">${item.ColumnaLectura}</span></span>
         <span class="reading-input-wrap">
           <input id="reading-${item.ColumnaLectura}" name="reading-${item.ColumnaLectura}" type="text" inputmode="decimal" autocomplete="off" aria-label="${item.NombreCampo}" data-column="${item.ColumnaLectura}" ${item.min !== undefined ? `data-min="${item.min}"` : "data-min=\"0\""} ${item.max !== undefined ? `data-max="${item.max}"` : ""} />
           <i class="input-status" data-lucide="check-circle-2" aria-hidden="true"></i>
@@ -161,18 +163,21 @@ function validateInput(input) {
 
 function updateProgress() {
   const inputs = [...document.querySelectorAll("[data-column]")];
-  const count = inputs.filter((input) => input.value.trim()).length;
+  const requiredInputs = inputs.filter((input) => !OPTIONAL_COLUMNS.has(input.dataset.column));
+  const requiredCount = requiredInputs.filter((input) => input.value.trim()).length;
+  const optionalCount = inputs.filter((input) => OPTIONAL_COLUMNS.has(input.dataset.column) && input.value.trim()).length;
   inputs.forEach((input) => input.closest(".reading-field").classList.toggle("filled", Boolean(input.value.trim())));
   GROUPS.forEach((group) => {
     const groupInputs = [...document.querySelectorAll(`[data-group="${group.id}"] [data-column]`)];
-    const groupFilled = groupInputs.filter((input) => input.value.trim()).length;
-    document.querySelector(`[data-group-count="${group.id}"]`).textContent = `${groupFilled} / ${groupInputs.length}`;
+    const groupRequired = groupInputs.filter((input) => !OPTIONAL_COLUMNS.has(input.dataset.column));
+    const groupFilled = groupRequired.filter((input) => input.value.trim()).length;
+    document.querySelector(`[data-group-count="${group.id}"]`).textContent = `${groupFilled} / ${groupRequired.length} obligatorias`;
   });
-  progressBar.style.width = `${(count / READINGS.length) * 100}%`;
-  progressLabel.textContent = `${count} de ${READINGS.length} lecturas`;
-  readyCount.textContent = count === 1 ? "1 lectura disponible" : `${count} lecturas disponibles`;
-  submitButton.disabled = count !== READINGS.length || loadingDraft || saveInFlight;
-  submitButton.querySelector("span").textContent = count === READINGS.length ? "Enviar lecturas" : `Faltan ${READINGS.length - count} lecturas`;
+  progressBar.style.width = `${(requiredCount / REQUIRED_READINGS.length) * 100}%`;
+  progressLabel.textContent = `${requiredCount} de ${REQUIRED_READINGS.length} obligatorias · ${optionalCount} opcionales`;
+  readyCount.textContent = `${requiredCount} lecturas obligatorias preparadas`;
+  submitButton.disabled = requiredCount !== REQUIRED_READINGS.length || loadingDraft || saveInFlight;
+  submitButton.querySelector("span").textContent = requiredCount === REQUIRED_READINGS.length ? "Enviar lecturas" : `Faltan ${REQUIRED_READINGS.length - requiredCount} obligatorias`;
 }
 
 function updateDestination() {
@@ -383,7 +388,9 @@ async function submitReadings(event) {
     if (!operatorInput.value.trim()) throw new Error("Introduce el nombre del operario.");
     if (dirtyColumns.size && !(await saveSharedDraft(false))) return;
     const readings = collectReadings(false);
-    if (readings.length !== READINGS.length) throw new Error(`Faltan ${READINGS.length - readings.length} lecturas antes del envío definitivo.`);
+    const receivedColumns = new Set(readings.map((reading) => reading.ColumnaLectura));
+    const missingRequired = REQUIRED_READINGS.filter((reading) => !receivedColumns.has(reading.ColumnaLectura));
+    if (missingRequired.length) throw new Error(`Faltan ${missingRequired.length} lecturas obligatorias antes del envío definitivo.`);
     setButtonsBusy(true, "Enviando…");
     const draft = buildDraft("Enviado", readings);
     const result = await callFlow({ accion: "enviar", fechaLectura: dateInput.value, borradorJson: JSON.stringify(draft) });
