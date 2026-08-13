@@ -233,15 +233,6 @@ function loadImage(file) {
   });
 }
 
-function loadDataUrlImage(dataUrl) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("No se pudo preparar la imagen para el reconocimiento."));
-    image.src = dataUrl;
-  });
-}
-
 function canvasToDataUrl(canvas) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -269,68 +260,6 @@ async function preparePhoto(file) {
   context.drawImage(image, 0, 0, width, height);
   const dataUrl = await canvasToDataUrl(canvas);
   return { dataUrl, base64: dataUrl.split(",")[1] };
-}
-
-function otsuThreshold(grays) {
-  const histogram = new Uint32Array(256);
-  for (const gray of grays) histogram[gray] += 1;
-  const total = grays.length;
-  let weightedTotal = 0;
-  for (let value = 0; value < 256; value += 1) weightedTotal += value * histogram[value];
-  let backgroundWeight = 0;
-  let backgroundSum = 0;
-  let bestVariance = -1;
-  let threshold = 128;
-  for (let value = 0; value < 256; value += 1) {
-    backgroundWeight += histogram[value];
-    if (!backgroundWeight) continue;
-    const foregroundWeight = total - backgroundWeight;
-    if (!foregroundWeight) break;
-    backgroundSum += value * histogram[value];
-    const backgroundMean = backgroundSum / backgroundWeight;
-    const foregroundMean = (weightedTotal - backgroundSum) / foregroundWeight;
-    const variance = backgroundWeight * foregroundWeight * (backgroundMean - foregroundMean) ** 2;
-    if (variance > bestVariance) { bestVariance = variance; threshold = value; }
-  }
-  return threshold;
-}
-
-async function prepareOcrVariants(dataUrl) {
-  const image = await loadDataUrlImage(dataUrl);
-  const marginX = Math.round(image.naturalWidth * 0.04);
-  const marginY = Math.round(image.naturalHeight * 0.04);
-  const sourceWidth = Math.max(1, image.naturalWidth - marginX * 2);
-  const sourceHeight = Math.max(1, image.naturalHeight - marginY * 2);
-  const scale = Math.max(1, Math.min(2.5, 2400 / sourceWidth));
-  const width = Math.max(1, Math.round(sourceWidth * scale));
-  const height = Math.max(1, Math.round(sourceHeight * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  context.drawImage(image, marginX, marginY, sourceWidth, sourceHeight, 0, 0, width, height);
-  const imageData = context.getImageData(0, 0, width, height);
-  const grays = new Uint8Array(width * height);
-  for (let pixel = 0, offset = 0; offset < imageData.data.length; pixel += 1, offset += 4) {
-    const gray = Math.round(imageData.data[offset] * 0.299 + imageData.data[offset + 1] * 0.587 + imageData.data[offset + 2] * 0.114);
-    grays[pixel] = gray;
-    const contrasted = Math.max(0, Math.min(255, (gray - 128) * 1.65 + 128));
-    imageData.data[offset] = contrasted;
-    imageData.data[offset + 1] = contrasted;
-    imageData.data[offset + 2] = contrasted;
-  }
-  context.putImageData(imageData, 0, 0);
-  const grayscale = canvas.toDataURL("image/png");
-  const threshold = otsuThreshold(grays);
-  for (let pixel = 0, offset = 0; offset < imageData.data.length; pixel += 1, offset += 4) {
-    const binary = grays[pixel] > threshold ? 255 : 0;
-    imageData.data[offset] = binary;
-    imageData.data[offset + 1] = binary;
-    imageData.data[offset + 2] = binary;
-  }
-  context.putImageData(imageData, 0, 0);
-  const binary = canvas.toDataURL("image/png");
-  return [binary, grayscale, dataUrl];
 }
 
 function normalizeOcrNumber(value) {
@@ -434,19 +363,8 @@ async function recognizePhoto(file) {
     photoPreview.src = photo.dataUrl;
     photoStatus.textContent = "Cargando el reconocimiento local…";
     const worker = await getOcrWorker();
-    const variants = await prepareOcrVariants(photo.dataUrl);
-    const attempts = [];
-    for (let index = 0; index < variants.length; index += 1) {
-      photoStatus.textContent = `Analizando los dígitos · intento ${index + 1} de ${variants.length}…`;
-      const recognition = await worker.recognize(variants[index], { rotateAuto: index === variants.length - 1 });
-      const text = recognition.data.text || "";
-      const candidates = numericCandidates(text);
-      const longest = candidates.reduce((length, candidate) => Math.max(length, candidate.replace(".", "").length), 0);
-      attempts.push({ text, confidence: Number(recognition.data.confidence) || 0, score: longest * 12 + (Number(recognition.data.confidence) || 0) });
-      if (longest >= 4 && Number(recognition.data.confidence) >= 75) break;
-    }
-    attempts.sort((a, b) => b.score - a.score);
-    const text = attempts[0]?.text || "";
+    const recognition = await worker.recognize(photo.dataUrl, { rotateAuto: true });
+    const text = recognition.data.text || "";
     const result = { textoDetectado: text };
     const value = chooseRecognizedValue(result, activePhotoColumn);
     recognizedText.textContent = text || "El reconocimiento local no encontró dígitos legibles.";
