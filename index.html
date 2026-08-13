@@ -7,7 +7,7 @@
     <meta name="description" content="Registro compartido de lecturas de planta de Masol Cartagena" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=14" />
+    <link rel="stylesheet" href="styles.css?v=15" />
     <title>Lecturas de planta | Masol Cartagena</title>
   </head>
   <body>
@@ -96,7 +96,7 @@
         <input id="recognizedValue" type="text" inputmode="decimal" autocomplete="off" />
       </label>
       <details class="recognized-details">
-        <summary>Texto detectado por AI Builder</summary>
+        <summary>Texto detectado por OCR local</summary>
         <pre id="recognizedText"></pre>
       </details>
       <div class="photo-dialog-actions">
@@ -108,7 +108,8 @@
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=14"></script>
-    <script src="app.js?v=14"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="config.js?v=15"></script>
+    <script src="app.js?v=15"></script>
   </body>
 </html>
