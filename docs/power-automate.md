@@ -64,7 +64,11 @@ Esquema del disparador:
   "properties": {
     "accion": { "type": "string" },
     "fechaLectura": { "type": "string" },
-    "borradorJson": { "type": "string" }
+    "borradorJson": { "type": "string" },
+    "columna": { "type": "string" },
+    "nombreCampo": { "type": "string" },
+    "tipoImagen": { "type": "string" },
+    "imagenBase64": { "type": "string" }
   },
   "required": ["accion", "fechaLectura"]
 }
@@ -82,7 +86,7 @@ Añade un control `Cambiar` sobre:
 triggerBody()?['accion']
 ```
 
-Crea los casos `cargar`, `guardar`, `enviar` y un caso predeterminado.
+Crea los casos `cargar`, `guardar`, `enviar`, `reconocer` y un caso predeterminado.
 
 ## 4. Caso cargar
 
@@ -164,7 +168,7 @@ La aplicación envía siempre el documento completo. El segundo operario primero
    length(body('Analizar_JSON_-_Envio')?['lecturas'])
    ```
 
-   igual a `43`.
+   igual o superior a `37` e igual o inferior a `43`.
 
 3. Crea o actualiza el archivo JSON igual que en el caso guardar.
 4. Responde inmediatamente con código `202`:
@@ -176,7 +180,33 @@ La aplicación envía siempre el documento completo. El segundo operario primero
 5. Después de la respuesta, localiza el Excel mensual y ejecuta el Office Script.
 6. Después de escribir correctamente en Excel, mueve el JSON a `Consumos Planta/Procesados`.
 
-## 7. Seleccionar el Excel mensual
+## 7. Caso reconocer: fotografía del contador
+
+1. Dentro de `Cambiar`, agrega el caso `reconocer`.
+2. Añade `AI Builder > Reconocer texto en una imagen o un documento PDF`.
+3. En el campo de la imagen, selecciona la pestaña `Expresión` y escribe:
+
+   ```text
+   base64ToBinary(triggerBody()?['imagenBase64'])
+   ```
+
+4. Añade la acción `Respuesta` con código `200`.
+5. En el cuerpo de la respuesta escribe el siguiente JSON. En lugar del texto entre corchetes, inserta desde `Contenido dinámico` el valor **Texto completo del documento** de AI Builder:
+
+   ```json
+   {
+     "ok": true,
+     "textoDetectado": "[Texto completo del documento]"
+   }
+   ```
+
+6. Configura la ejecución posterior de esta respuesta solamente después de que AI Builder termine correctamente.
+
+La aplicación busca los números del texto devuelto, propone el valor más coherente y obliga al operario a confirmarlo. La imagen se usa durante la petición y no se guarda en SharePoint.
+
+Si AI Builder no reconoce el contador, la entrada manual continúa disponible. Para mejorar el resultado, fotografía de frente, evita reflejos y encuadra únicamente la pantalla o esfera y sus dígitos.
+
+## 8. Seleccionar el Excel mensual
 
 Inicializa una variable de matriz `Meses`:
 
@@ -213,7 +243,7 @@ Parámetros del script:
 
 El script está en `office-scripts/EscribirLecturasPlanta.ts`.
 
-## 8. Conectar la aplicación
+## 9. Conectar la aplicación
 
 Guarda el flujo y copia la URL HTTP generada. Sustituye el marcador de `config.js`:
 
@@ -226,14 +256,15 @@ window.MASOL_CONFIG = Object.freeze({
 
 Regenera la URL antigua antes de producción. Una URL firmada incluida en una aplicación web puede ser inspeccionada desde el navegador.
 
-## 9. Prueba mínima
+## 10. Prueba mínima
 
 1. El operario A introduce dos lecturas.
 2. Comprueba que se crea `Borrador_Lecturas_FECHA.json`.
 3. El operario B abre la misma fecha y debe recuperar ambas lecturas.
 4. B añade otra lectura y comprueba que el archivo contiene las tres.
-5. Completa las 43 lecturas y envía.
-6. Aprueba y confirma la escritura en el Excel y el traslado del JSON a `Procesados`.
+5. Pulsa la cámara de una lectura, fotografía el contador, confirma el valor reconocido y comprueba que el campo sigue siendo editable.
+6. Completa las 37 lecturas obligatorias y envía.
+7. Confirma la escritura en el Excel y el traslado del JSON a `Procesados`.
 
 ## Límite conocido
 

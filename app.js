@@ -2,6 +2,8 @@ const CONFIG = window.MASOL_CONFIG || {};
 const FLOW_URL = CONFIG.FLOW_URL || "";
 const AUTO_SAVE_DELAY_MS = Number(CONFIG.AUTO_SAVE_DELAY_MS) || 1400;
 const MAX_PREVIOUS_LOOKBACK_DAYS = 10;
+const PHOTO_MAX_EDGE = 1600;
+const PHOTO_JPEG_QUALITY = 0.82;
 const OPERATOR_KEY = "masol-consumos-planta-operator-v2";
 const MONTHS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const OPTIONAL_COLUMNS = new Set(["E", "F", "I", "N", "O", "AR"]);
@@ -82,6 +84,16 @@ const connectionState = document.querySelector("#connectionState");
 const connectionLabel = document.querySelector("#connectionLabel");
 const installButton = document.querySelector("#installButton");
 const toast = document.querySelector("#toast");
+const photoInput = document.querySelector("#counterPhotoInput");
+const photoDialog = document.querySelector("#photoDialog");
+const photoPreview = document.querySelector("#photoPreview");
+const photoTitle = document.querySelector("#photoTitle");
+const photoStatus = document.querySelector("#photoStatus");
+const recognizedValue = document.querySelector("#recognizedValue");
+const recognizedText = document.querySelector("#recognizedText");
+const useRecognizedButton = document.querySelector("#useRecognizedButton");
+const retryPhotoButton = document.querySelector("#retryPhotoButton");
+const cancelPhotoButton = document.querySelector("#cancelPhotoButton");
 
 let deferredInstallPrompt;
 let saveTimer;
@@ -90,6 +102,8 @@ let loadingDraft = false;
 const dirtyColumns = new Set();
 const previousReadings = new Map();
 let previousReadingDate = "";
+let activePhotoColumn = "";
+let activeCameraButton = null;
 
 function reading(Orden, group, NombreCampo, ColumnaLectura, ColumnaTotales, TipoValidacion, limits = {}) {
   return { Orden, group, Bloque: group === "produccion" ? "PRODUCCION L a D" : "MANTENIMIENTO L a V", NombreCampo, ColumnaLectura, ColumnaTotales, TipoValidacion, ...limits };
@@ -114,14 +128,17 @@ function renderSections() {
   sectionsContainer.innerHTML = GROUPS.map((group, index) => {
     const fields = READINGS.filter((item) => item.group === group.id);
     const fieldMarkup = fields.map((item) => `
-      <label class="field reading-field" data-field="${item.ColumnaLectura}">
-        <span class="label-line"><span>${item.NombreCampo}${OPTIONAL_COLUMNS.has(item.ColumnaLectura) ? " · Opcional" : ""}</span><span class="column-code" title="Columna Excel ${item.ColumnaLectura}">${item.ColumnaLectura}</span></span>
+      <div class="field reading-field" data-field="${item.ColumnaLectura}">
+        <label class="label-line" for="reading-${item.ColumnaLectura}"><span>${item.NombreCampo}${OPTIONAL_COLUMNS.has(item.ColumnaLectura) ? " · Opcional" : ""}</span><span class="column-code" title="Columna Excel ${item.ColumnaLectura}">${item.ColumnaLectura}</span></label>
         <span class="reading-input-wrap">
-          <input id="reading-${item.ColumnaLectura}" name="reading-${item.ColumnaLectura}" type="text" inputmode="decimal" autocomplete="off" aria-label="${item.NombreCampo}" data-column="${item.ColumnaLectura}" ${item.min !== undefined ? `data-min="${item.min}"` : "data-min=\"0\""} ${item.max !== undefined ? `data-max="${item.max}"` : ""} />
-          <i class="input-status" data-lucide="check-circle-2" aria-hidden="true"></i>
+          <span class="input-shell">
+            <input id="reading-${item.ColumnaLectura}" name="reading-${item.ColumnaLectura}" type="text" inputmode="decimal" autocomplete="off" aria-label="${item.NombreCampo}" data-column="${item.ColumnaLectura}" ${item.min !== undefined ? `data-min="${item.min}"` : "data-min=\"0\""} ${item.max !== undefined ? `data-max="${item.max}"` : ""} />
+            <i class="input-status" data-lucide="check-circle-2" aria-hidden="true"></i>
+          </span>
+          <button class="camera-button" type="button" data-camera-column="${item.ColumnaLectura}" title="Fotografiar ${item.NombreCampo}" aria-label="Fotografiar ${item.NombreCampo}"><i data-lucide="camera"></i></button>
         </span>
         <small class="reading-author" data-author-for="${item.ColumnaLectura}" hidden></small>
-      </label>`).join("");
+      </div>`).join("");
     return `<details class="reading-section" data-group="${group.id}" ${index === 0 ? "open" : ""}>
       <summary><span class="section-index">0${index + 1}</span><span class="section-title"><span><strong>${group.label}</strong><small>${group.detail}</small></span></span><span class="section-count" data-group-count="${group.id}">0 / ${fields.length}</span><i class="section-chevron" data-lucide="chevron-down" aria-hidden="true"></i></summary>
       <div class="fields-grid">${fieldMarkup}</div>
@@ -203,6 +220,155 @@ async function callFlow(payload) {
   }
   if (!response.ok) throw new Error(result.mensaje || `El flujo respondió con el código ${response.status}.`);
   return result;
+}
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+    image.onerror = () => { URL.revokeObjectURL(url); reject(new Error("No se pudo abrir la fotografía.")); };
+    image.src = url;
+  });
+}
+
+function canvasToDataUrl(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) return reject(new Error("No se pudo preparar la fotografía."));
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error("No se pudo leer la fotografía."));
+      reader.readAsDataURL(blob);
+    }, "image/jpeg", PHOTO_JPEG_QUALITY);
+  });
+}
+
+async function preparePhoto(file) {
+  if (!file || !file.type.startsWith("image/")) throw new Error("Selecciona una fotografía válida.");
+  const image = await loadImage(file);
+  const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+  const dataUrl = await canvasToDataUrl(canvas);
+  return { dataUrl, base64: dataUrl.split(",")[1] };
+}
+
+function normalizeOcrNumber(value) {
+  let text = String(value ?? "").trim().replace(/\s/g, "");
+  if (!text || !/^\d[\d.,]*$/.test(text)) return "";
+  const lastComma = text.lastIndexOf(",");
+  const lastDot = text.lastIndexOf(".");
+  if (lastComma >= 0 && lastDot >= 0) {
+    const decimalSeparator = lastComma > lastDot ? "," : ".";
+    const thousandsSeparator = decimalSeparator === "," ? /\./g : /,/g;
+    text = text.replace(thousandsSeparator, "").replace(decimalSeparator, ".");
+  } else if (lastComma >= 0) {
+    text = text.replace(/\./g, "").replace(",", ".");
+  } else if ((text.match(/\./g) || []).length > 1) {
+    const parts = text.split(".");
+    text = `${parts.slice(0, -1).join("")}.${parts.at(-1)}`;
+  }
+  return parseNumber(text) === null ? "" : text;
+}
+
+function numericCandidates(text) {
+  const matches = String(text || "").match(/\d[\d\t .,]*\d|\d/g) || [];
+  return [...new Set(matches.map(normalizeOcrNumber).filter(Boolean))];
+}
+
+function chooseRecognizedValue(result, column) {
+  const directValue = result.valor ?? result.Valor ?? result.lectura ?? result.numero;
+  const normalizedDirect = normalizeOcrNumber(directValue);
+  if (normalizedDirect) return normalizedDirect;
+  const text = result.textoDetectado ?? result.texto ?? result.fullText ?? result.text ?? "";
+  const input = document.querySelector(`[data-column="${column}"]`);
+  const min = Number(input?.dataset.min ?? 0);
+  const max = input?.dataset.max === undefined ? Number.POSITIVE_INFINITY : Number(input.dataset.max);
+  const previous = previousReadings.get(column);
+  const readingDefinition = READINGS.find((item) => item.ColumnaLectura === column);
+  const totalizer = readingDefinition?.TipoValidacion !== "LecturaDirecta";
+  const candidates = numericCandidates(text)
+    .map((candidate) => ({ candidate, number: parseNumber(candidate) }))
+    .filter((item) => item.number !== null && item.number >= min && item.number <= max)
+    .filter((item) => !totalizer || previous === undefined || item.number >= previous);
+  if (!candidates.length) return "";
+  if (totalizer && previous !== undefined) {
+    candidates.sort((a, b) => (a.number - previous) - (b.number - previous));
+  } else {
+    candidates.sort((a, b) => b.candidate.replace(".", "").length - a.candidate.replace(".", "").length);
+  }
+  return candidates[0].candidate;
+}
+
+function setRecognitionBusy(busy) {
+  if (activeCameraButton) activeCameraButton.disabled = busy;
+  retryPhotoButton.disabled = busy;
+  useRecognizedButton.disabled = busy || parseNumber(recognizedValue.value) === null;
+  photoDialog.classList.toggle("recognizing", busy);
+}
+
+async function recognizePhoto(file) {
+  const readingDefinition = READINGS.find((item) => item.ColumnaLectura === activePhotoColumn);
+  if (!readingDefinition) return;
+  photoTitle.textContent = readingDefinition.NombreCampo;
+  photoStatus.textContent = "Preparando fotografía…";
+  recognizedValue.value = "";
+  recognizedText.textContent = "";
+  photoPreview.removeAttribute("src");
+  if (!photoDialog.open) photoDialog.showModal();
+  setRecognitionBusy(true);
+  try {
+    const photo = await preparePhoto(file);
+    photoPreview.src = photo.dataUrl;
+    photoStatus.textContent = "Reconociendo la lectura…";
+    const result = await callFlow({
+      accion: "reconocer",
+      fechaLectura: dateInput.value,
+      columna: activePhotoColumn,
+      nombreCampo: readingDefinition.NombreCampo,
+      tipoImagen: "image/jpeg",
+      imagenBase64: photo.base64
+    });
+    const text = result.textoDetectado ?? result.texto ?? result.fullText ?? result.text ?? "";
+    const value = chooseRecognizedValue(result, activePhotoColumn);
+    recognizedText.textContent = text || "AI Builder no devolvió texto legible.";
+    recognizedValue.value = value;
+    photoStatus.textContent = value
+      ? "Lectura detectada. Comprueba el número antes de usarlo."
+      : "No se ha podido elegir una lectura. Escríbela manualmente o repite la foto.";
+  } catch (error) {
+    photoStatus.textContent = error.message || "No se pudo reconocer la fotografía.";
+    recognizedText.textContent = "Puedes cerrar esta ventana y continuar introduciendo la lectura manualmente.";
+  } finally {
+    setRecognitionBusy(false);
+  }
+}
+
+function startPhotoCapture(column, button) {
+  if (!navigator.onLine) return void showToast("Necesitas conexión para reconocer una fotografía.");
+  activePhotoColumn = column;
+  activeCameraButton = button;
+  photoInput.value = "";
+  photoInput.click();
+}
+
+function applyRecognizedValue() {
+  const input = document.querySelector(`[data-column="${activePhotoColumn}"]`);
+  const value = normalizeOcrNumber(recognizedValue.value);
+  if (!input || !value) return void showToast("Revisa la lectura reconocida.");
+  input.value = value;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.focus();
+  photoDialog.close();
+  showToast("Lectura añadida desde la fotografía. Comprueba el valor antes de enviar.");
 }
 
 function normalizeServerReadings(result) {
@@ -448,6 +614,7 @@ function setButtonsBusy(active, label) {
 
 function setFormDisabled(disabled) {
   document.querySelectorAll("[data-column]").forEach((input) => { input.disabled = disabled; });
+  document.querySelectorAll("[data-camera-column]").forEach((button) => { button.disabled = disabled; });
   saveButton.disabled = disabled;
 }
 
@@ -507,6 +674,20 @@ function initialize() {
       showToast(event.target.dataset.validationMessage);
     }
   });
+  sectionsContainer.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-camera-column]");
+    if (button) startPhotoCapture(button.dataset.cameraColumn, button);
+  });
+  photoInput.addEventListener("change", () => {
+    const [file] = photoInput.files || [];
+    if (file) recognizePhoto(file);
+  });
+  recognizedValue.addEventListener("input", () => {
+    useRecognizedButton.disabled = normalizeOcrNumber(recognizedValue.value) === "";
+  });
+  useRecognizedButton.addEventListener("click", applyRecognizedValue);
+  retryPhotoButton.addEventListener("click", () => { photoInput.value = ""; photoInput.click(); });
+  cancelPhotoButton.addEventListener("click", () => photoDialog.close());
   dateInput.addEventListener("change", () => { updateDestination(); loadSharedDraft(); });
   form.addEventListener("submit", submitReadings);
   saveButton.addEventListener("click", () => saveSharedDraft(true).catch((error) => showToast(error.message)));
