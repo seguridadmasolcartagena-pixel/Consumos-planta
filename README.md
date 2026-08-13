@@ -2,7 +2,7 @@
 
 PWA para registrar de forma compartida las lecturas diarias de consumos de Masol Cartagena. Dos operarios pueden completar la misma fecha desde dispositivos distintos: Power Automate guarda un archivo JSON por fecha en SharePoint y el segundo dispositivo recupera los valores ya introducidos.
 
-Cada lectura dispone de un botón de cámara. La aplicación envía temporalmente la fotografía a Power Automate, AI Builder reconoce los dígitos y el operario revisa el valor antes de incorporarlo al formulario. La introducción manual permanece siempre disponible y las fotografías no se guardan en SharePoint.
+Cada lectura dispone de un botón de cámara. Tesseract.js reconoce los dígitos directamente en el navegador y el operario revisa el valor antes de incorporarlo al formulario. La introducción manual permanece siempre disponible y las fotografías no se guardan ni se envían a Power Automate.
 
 El envío definitivo se habilita al completar las 37 lecturas obligatorias. Se pueden dejar vacíos `Contador Desc. Entrada`, `Contador Desc. Salida`, `Contador Reactor Biológico`, `Cfv`, `Contador Gas Natural` y `Totalizador 390`; el Office Script no modifica sus celdas cuando se omiten. Power Automate ejecuta directamente el script sobre `Datos-Planta-Mes-Año.xlsx` y escribe únicamente en la hoja `Mes Año`.
 
@@ -16,7 +16,7 @@ La aplicación no guarda lecturas en el dispositivo. Solo recuerda el nombre del
 
 ## Archivos principales
 
-- `app.js`: captura manual o fotográfica, reconocimiento OCR, carga y guardado compartido, validación y envío JSON.
+- `app.js`: captura manual o fotográfica, OCR local, carga y guardado compartido, validación y envío JSON.
 - `config.js`: URL del flujo y retardo del guardado automático.
 - `office-scripts/EscribirLecturasPlanta.ts`: escritura y reparto de consumos.
 - `docs/power-automate.md`: guía completa de implementación y pruebas.

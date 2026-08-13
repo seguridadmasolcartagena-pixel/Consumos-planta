@@ -104,6 +104,7 @@ const previousReadings = new Map();
 let previousReadingDate = "";
 let activePhotoColumn = "";
 let activeCameraButton = null;
+let ocrWorkerPromise = null;
 
 function reading(Orden, group, NombreCampo, ColumnaLectura, ColumnaTotales, TipoValidacion, limits = {}) {
   return { Orden, group, Bloque: group === "produccion" ? "PRODUCCION L a D" : "MANTENIMIENTO L a V", NombreCampo, ColumnaLectura, ColumnaTotales, TipoValidacion, ...limits };
@@ -315,6 +316,38 @@ function setRecognitionBusy(busy) {
   photoDialog.classList.toggle("recognizing", busy);
 }
 
+function ocrProgressMessage(message) {
+  const percent = Number.isFinite(message.progress) ? ` ${Math.round(message.progress * 100)} %` : "";
+  const labels = {
+    "loading tesseract core": "Cargando el motor OCR",
+    "initializing tesseract": "Iniciando el motor OCR",
+    "loading language traineddata": "Cargando el reconocimiento de dígitos",
+    "initializing api": "Preparando el reconocimiento",
+    "recognizing text": "Reconociendo la lectura"
+  };
+  return `${labels[message.status] || "Procesando la fotografía"}${percent}…`;
+}
+
+async function getOcrWorker() {
+  if (!window.Tesseract) throw new Error("No se pudo cargar el motor OCR local. Comprueba la conexión y vuelve a abrir la aplicación.");
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = window.Tesseract.createWorker("eng", 1, {
+      logger: (message) => { if (photoDialog.open) photoStatus.textContent = ocrProgressMessage(message); }
+    }).then(async (worker) => {
+      await worker.setParameters({
+        tessedit_char_whitelist: "0123456789.,",
+        tessedit_pageseg_mode: window.Tesseract.PSM.SINGLE_LINE,
+        preserve_interword_spaces: "1"
+      });
+      return worker;
+    }).catch((error) => {
+      ocrWorkerPromise = null;
+      throw error;
+    });
+  }
+  return ocrWorkerPromise;
+}
+
 async function recognizePhoto(file) {
   const readingDefinition = READINGS.find((item) => item.ColumnaLectura === activePhotoColumn);
   if (!readingDefinition) return;
@@ -328,18 +361,13 @@ async function recognizePhoto(file) {
   try {
     const photo = await preparePhoto(file);
     photoPreview.src = photo.dataUrl;
-    photoStatus.textContent = "Reconociendo la lectura…";
-    const result = await callFlow({
-      accion: "reconocer",
-      fechaLectura: dateInput.value,
-      columna: activePhotoColumn,
-      nombreCampo: readingDefinition.NombreCampo,
-      tipoImagen: "image/jpeg",
-      imagenBase64: photo.base64
-    });
-    const text = result.textoDetectado ?? result.texto ?? result.fullText ?? result.text ?? "";
+    photoStatus.textContent = "Cargando el reconocimiento local…";
+    const worker = await getOcrWorker();
+    const recognition = await worker.recognize(photo.dataUrl, { rotateAuto: true });
+    const text = recognition.data.text || "";
+    const result = { textoDetectado: text };
     const value = chooseRecognizedValue(result, activePhotoColumn);
-    recognizedText.textContent = text || "AI Builder no devolvió texto legible.";
+    recognizedText.textContent = text || "El reconocimiento local no encontró dígitos legibles.";
     recognizedValue.value = value;
     photoStatus.textContent = value
       ? "Lectura detectada. Comprueba el número antes de usarlo."
@@ -353,7 +381,6 @@ async function recognizePhoto(file) {
 }
 
 function startPhotoCapture(column, button) {
-  if (!navigator.onLine) return void showToast("Necesitas conexión para reconocer una fotografía.");
   activePhotoColumn = column;
   activeCameraButton = button;
   photoInput.value = "";
