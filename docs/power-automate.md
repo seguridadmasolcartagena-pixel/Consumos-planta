@@ -64,7 +64,11 @@ Esquema del disparador:
   "properties": {
     "accion": { "type": "string" },
     "fechaLectura": { "type": "string" },
-    "borradorJson": { "type": "string" }
+    "borradorJson": { "type": "string" },
+    "columna": { "type": "string" },
+    "nombreCampo": { "type": "string" },
+    "tipoImagen": { "type": "string" },
+    "imagenBase64": { "type": "string" }
   },
   "required": ["accion", "fechaLectura"]
 }
@@ -82,7 +86,7 @@ Añade un control `Cambiar` sobre:
 triggerBody()?['accion']
 ```
 
-Crea los casos `cargar`, `guardar`, `enviar` y un caso predeterminado.
+Crea los casos `cargar`, `guardar`, `enviar`, `reconocer` y un caso predeterminado.
 
 ## 4. Caso cargar
 
@@ -176,11 +180,31 @@ La aplicación envía siempre el documento completo. El segundo operario primero
 5. Después de la respuesta, localiza el Excel mensual y ejecuta el Office Script.
 6. Después de escribir correctamente en Excel, mueve el JSON a `Consumos Planta/Procesados`.
 
-## 7. Reconocimiento fotográfico en el navegador
+## 7. Caso reconocer: fotografía del contador
 
-El reconocimiento de los contadores se ejecuta directamente en el dispositivo mediante Tesseract.js. No requiere un caso adicional en Power Automate, créditos de AI Builder ni el envío de fotografías al flujo.
+1. Dentro de `Cambiar`, agrega el caso `reconocer`.
+2. Añade `AI Builder > Reconocer texto en una imagen o un documento PDF`.
+3. En el campo de la imagen, selecciona la pestaña `Expresión` y escribe:
 
-La primera fotografía puede tardar más mientras el navegador descarga el motor OCR. Para mejorar el resultado, fotografía de frente, evita reflejos y encuadra únicamente la pantalla o esfera y sus dígitos. El valor detectado siempre se muestra al operario antes de incorporarlo al formulario.
+   ```text
+   base64ToBinary(triggerBody()?['imagenBase64'])
+   ```
+
+4. Añade la acción `Respuesta` con código `200`.
+5. En el cuerpo de la respuesta escribe el siguiente JSON. En lugar del texto entre corchetes, inserta desde `Contenido dinámico` el valor **Texto completo del documento** de AI Builder:
+
+   ```json
+   {
+     "ok": true,
+     "textoDetectado": "[Texto completo del documento]"
+   }
+   ```
+
+6. Configura la ejecución posterior de esta respuesta solamente después de que AI Builder termine correctamente.
+
+La aplicación busca los números del texto devuelto, propone el valor más coherente y obliga al operario a confirmarlo. La imagen se usa durante la petición y no se guarda en SharePoint.
+
+Si AI Builder no reconoce el contador, la entrada manual continúa disponible. Para mejorar el resultado, fotografía de frente, evita reflejos y encuadra únicamente la pantalla o esfera y sus dígitos.
 
 ## 8. Seleccionar el Excel mensual
 
