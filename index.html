@@ -7,7 +7,7 @@
     <meta name="description" content="Registro compartido de lecturas de planta de Masol Cartagena" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=14" />
+    <link rel="stylesheet" href="styles.css?v=17" />
     <title>Lecturas de planta | Masol Cartagena</title>
   </head>
   <body>
@@ -58,7 +58,7 @@
         </div>
 
         <div class="progress-region" aria-live="polite">
-          <div class="progress-copy"><span id="progressLabel">0 de 37 obligatorias · 0 opcionales</span><span id="draftLabel">Sin cambios pendientes</span></div>
+          <div class="progress-copy"><span id="progressLabel">0 de 43 lecturas preparadas · todas opcionales</span><span id="draftLabel">Sin cambios pendientes</span></div>
           <div class="progress-track" aria-hidden="true"><span id="progressBar"></span></div>
         </div>
 
@@ -67,11 +67,11 @@
         <div class="submission-bar">
           <div class="submission-summary">
             <i data-lucide="users" aria-hidden="true"></i>
-            <span><strong id="readyCount">0 lecturas disponibles</strong><small>Las lecturas en verde proceden del borrador compartido.</small></span>
+            <span><strong id="readyCount">0 lecturas preparadas</strong><small>Las lecturas en verde proceden del borrador compartido.</small></span>
           </div>
           <div class="submission-actions">
             <button class="secondary-button" id="saveButton" type="button"><i data-lucide="cloud-upload"></i><span>Guardar borrador</span></button>
-            <button class="primary-button" id="submitButton" type="submit" disabled><span>Faltan 37 obligatorias</span><i data-lucide="send" aria-hidden="true"></i></button>
+            <button class="primary-button" id="submitButton" type="submit" disabled><span>Añade al menos una lectura</span><i data-lucide="send" aria-hidden="true"></i></button>
           </div>
         </div>
       </form>
@@ -108,7 +108,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=14"></script>
-    <script src="app.js?v=14"></script>
+    <script src="config.js?v=17"></script>
+    <script src="app.js?v=17"></script>
   </body>
 </html>
