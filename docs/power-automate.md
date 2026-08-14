@@ -168,7 +168,7 @@ La aplicación envía siempre el documento completo. El segundo operario primero
    length(body('Analizar_JSON_-_Envio')?['lecturas'])
    ```
 
-   igual o superior a `37` e igual o inferior a `43`.
+   igual o superior a `1` e igual o inferior a `43`.
 
 3. Crea o actualiza el archivo JSON igual que en el caso guardar.
 4. Responde inmediatamente con código `202`:
@@ -263,7 +263,7 @@ Regenera la URL antigua antes de producción. Una URL firmada incluida en una ap
 3. El operario B abre la misma fecha y debe recuperar ambas lecturas.
 4. B añade otra lectura y comprueba que el archivo contiene las tres.
 5. Pulsa la cámara de una lectura, fotografía el contador, confirma el valor reconocido y comprueba que el campo sigue siendo editable.
-6. Completa las 37 lecturas obligatorias y envía.
+6. Introduce al menos una lectura y envía.
 7. Confirma la escritura en el Excel y el traslado del JSON a `Procesados`.
 
 ## Límite conocido

@@ -4,7 +4,7 @@ PWA para registrar de forma compartida las lecturas diarias de consumos de Masol
 
 Cada lectura dispone de un botón de cámara. La aplicación envía temporalmente la fotografía a Power Automate, AI Builder reconoce los dígitos y el operario revisa el valor antes de incorporarlo al formulario. La introducción manual permanece siempre disponible y las fotografías no se guardan en SharePoint.
 
-El envío definitivo se habilita al completar las 37 lecturas obligatorias. Se pueden dejar vacíos `Contador Desc. Entrada`, `Contador Desc. Salida`, `Contador Reactor Biológico`, `Cfv`, `Contador Gas Natural` y `Totalizador 390`; el Office Script no modifica sus celdas cuando se omiten. Power Automate ejecuta directamente el script sobre `Datos-Planta-Mes-Año.xlsx` y escribe únicamente en la hoja `Mes Año`.
+Todas las medidas son opcionales. El envío definitivo se habilita al introducir al menos una lectura; el Office Script escribe únicamente las medidas recibidas y no modifica las demás celdas. Power Automate ejecuta directamente el script sobre `Datos-Planta-Mes-Año.xlsx` y escribe únicamente en la hoja `Mes Año`.
 
 ## Configuración
 
