@@ -23,11 +23,11 @@ const MESES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
 ];
 
-const COLUMNAS_OPCIONALES = new Set<string>(["E", "F", "I", "N", "O", "AR"]);
-const COLUMNAS_OBLIGATORIAS = [
-  "B", "C", "D", "G", "H", "J", "K", "L", "M", "P", "Q", "R", "S",
-  "T", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AD", "AE",
-  "AF", "AG", "AH", "AI", "AJ", "AK", "AL", "AM", "AN", "AO", "AP", "AQ"
+const COLUMNAS_PERMITIDAS = [
+  "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N",
+  "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "AA",
+  "AB", "AC", "AD", "AE", "AF", "AG", "AH", "AI", "AJ", "AK", "AL",
+  "AM", "AN", "AO", "AP", "AQ", "AR"
 ];
 const TOTAL_COLUMNAS_HASTA_AR = 44;
 const MAX_FILAS_BUSQUEDA = 366;
@@ -41,8 +41,8 @@ function main(workbook: ExcelScript.Workbook, fechaLectura: string, lecturasJson
   if (!hoja) throw new Error(`No existe la hoja '${hojaNombre}'.`);
 
   const lecturas = parseLecturas(lecturasJson);
-  if (lecturas.length < COLUMNAS_OBLIGATORIAS.length || lecturas.length > 43) {
-    throw new Error(`Se esperaban entre ${COLUMNAS_OBLIGATORIAS.length} y 43 lecturas y se recibieron ${lecturas.length}.`);
+  if (lecturas.length < 1 || lecturas.length > 43) {
+    throw new Error(`Se esperaban entre 1 y 43 lecturas y se recibieron ${lecturas.length}.`);
   }
 
   // Una hoja con formato aplicado a columnas completas puede tener un UsedRange enorme.
@@ -72,10 +72,8 @@ function main(workbook: ExcelScript.Workbook, fechaLectura: string, lecturasJson
     }
   }
 
-  const faltantes = COLUMNAS_OBLIGATORIAS.filter((columna) => !letrasRecibidas.has(columna));
-  if (faltantes.length) throw new Error(`Faltan columnas obligatorias: ${faltantes.join(", ")}.`);
   for (const columna of letrasRecibidas) {
-    if (!COLUMNAS_OBLIGATORIAS.includes(columna) && !COLUMNAS_OPCIONALES.has(columna)) {
+    if (!COLUMNAS_PERMITIDAS.includes(columna)) {
       throw new Error(`La columna ${columna} no está permitida.`);
     }
   }
@@ -92,7 +90,7 @@ function main(workbook: ExcelScript.Workbook, fechaLectura: string, lecturasJson
     };
   }
 
-  // Escribe únicamente las columnas recibidas. Las opcionales vacías no se modifican.
+  // Escribe únicamente las columnas recibidas. Las medidas no recibidas no se modifican.
   const ordenadas = valoresPorColumna.sort((a, b) => a.columna - b.columna);
   let inicio = 0;
   while (inicio < ordenadas.length) {
