@@ -1,5 +1,5 @@
-const CACHE_NAME = "masol-lecturas-v14";
-const APP_SHELL = ["./", "./index.html", "./styles.css?v=14", "./app.js?v=14", "./config.js?v=14", "./manifest.webmanifest", "./icon.svg"];
+const CACHE_NAME = "masol-lecturas-v17";
+const APP_SHELL = ["./", "./index.html", "./styles.css?v=17", "./app.js?v=17", "./config.js?v=17", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
