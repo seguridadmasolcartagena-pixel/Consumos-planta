@@ -7,7 +7,7 @@
     <meta name="description" content="Registro compartido de lecturas de planta de Masol Cartagena" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=17" />
+    <link rel="stylesheet" href="styles.css?v=18" />
     <title>Lecturas de planta | Masol Cartagena</title>
   </head>
   <body>
@@ -15,8 +15,8 @@
 
     <header class="app-header">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><i data-lucide="factory"></i></span>
-        <span><strong>MASOL Cartagena</strong><small>Lecturas de planta</small></span>
+        <img class="brand-logo" src="logo-masol.png" alt="MASOL Iberia Biofuel" />
+        <span class="brand-context"><strong>Cartagena</strong><small>Lecturas de planta</small></span>
       </div>
       <div class="header-actions">
         <span class="connection-state" id="connectionState">
@@ -70,7 +70,6 @@
             <span><strong id="readyCount">0 lecturas preparadas</strong><small>Las lecturas en verde proceden del borrador compartido.</small></span>
           </div>
           <div class="submission-actions">
-            <button class="secondary-button" id="saveButton" type="button"><i data-lucide="cloud-upload"></i><span>Guardar borrador</span></button>
             <button class="primary-button" id="submitButton" type="submit" disabled><span>Añade al menos una lectura</span><i data-lucide="send" aria-hidden="true"></i></button>
           </div>
         </div>
@@ -108,7 +107,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-    <script src="config.js?v=17"></script>
-    <script src="app.js?v=17"></script>
+    <script src="config.js?v=18"></script>
+    <script src="app.js?v=18"></script>
   </body>
 </html>

@@ -71,7 +71,6 @@ const readyCount = document.querySelector("#readyCount");
 const draftLabel = document.querySelector("#draftLabel");
 const sheetDestination = document.querySelector("#sheetDestination");
 const submitButton = document.querySelector("#submitButton");
-const saveButton = document.querySelector("#saveButton");
 const refreshButton = document.querySelector("#refreshButton");
 const sharedState = document.querySelector("#sharedState");
 const sharedTitle = document.querySelector("#sharedTitle");
@@ -598,19 +597,16 @@ function buildDraft(estado, readings) {
 }
 
 function setButtonsBusy(active, label) {
-  saveButton.disabled = active;
   refreshButton.disabled = active;
   if (active) {
     submitButton.disabled = true;
     if (label) submitButton.querySelector("span").textContent = label;
   }
-  saveButton.classList.toggle("loading", active);
 }
 
 function setFormDisabled(disabled) {
   document.querySelectorAll("[data-column]").forEach((input) => { input.disabled = disabled; });
   document.querySelectorAll("[data-camera-column]").forEach((button) => { button.disabled = disabled; });
-  saveButton.disabled = disabled;
 }
 
 function showResult(success, title, message) {
@@ -685,7 +681,6 @@ function initialize() {
   cancelPhotoButton.addEventListener("click", () => photoDialog.close());
   dateInput.addEventListener("change", () => { updateDestination(); loadSharedDraft(); });
   form.addEventListener("submit", submitReadings);
-  saveButton.addEventListener("click", () => saveSharedDraft(true).catch((error) => showToast(error.message)));
   refreshButton.addEventListener("click", loadSharedDraft);
   document.querySelector("#closeDialog").addEventListener("click", () => resultDialog.close());
   window.addEventListener("online", updateConnectionState);
