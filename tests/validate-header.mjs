@@ -8,8 +8,9 @@ const worker = readFileSync(new URL("../service-worker.js", import.meta.url), "u
 assert.doesNotMatch(html, /id="saveButton"/);
 assert.doesNotMatch(app, /saveButton/);
 assert.match(html, /src="logo-masol\.png" alt="MASOL Iberia Biofuel"/);
-assert.match(html, /app\.js\?v=18/);
-assert.match(worker, /masol-lecturas-v18/);
+assert.match(html, /auth\.js\?v=19/);
+assert.doesNotMatch(html, /<script src="app\.js/);
+assert.match(worker, /masol-lecturas-v19/);
 assert.match(worker, /logo-masol\.png/);
 assert.ok(existsSync(new URL("../logo-masol.png", import.meta.url)));
 
