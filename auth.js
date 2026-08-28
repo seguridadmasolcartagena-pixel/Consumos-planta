@@ -40,7 +40,7 @@
     authRoot.innerHTML = `
       <main class="login-page">
         <section class="login-panel" aria-labelledby="loginTitle">
-          <img class="login-logo" src="logo-masol.png" alt="MASOL Iberia Biofuel" />
+          <img class="login-logo" src="logo-masol.png?v=20260828" alt="MASOL Cartagena Biofuel" />
           <div class="login-heading">
             <p>Acceso interno</p>
             <h1 id="loginTitle">Lecturas de consumos de planta</h1>
