@@ -119,6 +119,52 @@ function deviceType() {
   return "Escritorio";
 }
 
+function isStandaloneApp() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function captureInstallPrompt(event) {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  if (window.MASOL_INSTALL_STATE) window.MASOL_INSTALL_STATE.promptEvent = event;
+  installButton.hidden = isStandaloneApp();
+}
+
+function installHelpMessage() {
+  const isAppleMobile = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  return isAppleMobile
+    ? "En iPhone o iPad, abre Compartir y selecciona ‘Añadir a pantalla de inicio’."
+    : "Abre el menú del navegador y selecciona ‘Instalar aplicación’ o ‘Añadir a pantalla de inicio’.";
+}
+
+async function requestAppInstall() {
+  if (isStandaloneApp()) {
+    installButton.hidden = true;
+    showToast("La aplicación ya está instalada.");
+    return;
+  }
+
+  const promptEvent = deferredInstallPrompt || window.MASOL_INSTALL_STATE?.promptEvent;
+  if (!promptEvent) return void showToast(installHelpMessage());
+
+  try {
+    await promptEvent.prompt();
+    const choice = await promptEvent.userChoice;
+    deferredInstallPrompt = null;
+    if (window.MASOL_INSTALL_STATE) window.MASOL_INSTALL_STATE.promptEvent = null;
+    if (choice.outcome === "accepted") {
+      installButton.hidden = true;
+      showToast("Instalación iniciada.");
+    } else {
+      showToast("Instalación cancelada. Puedes volver a intentarlo desde el menú del navegador.");
+    }
+  } catch {
+    deferredInstallPrompt = null;
+    if (window.MASOL_INSTALL_STATE) window.MASOL_INSTALL_STATE.promptEvent = null;
+    showToast(installHelpMessage());
+  }
+}
+
 function isConfigured() {
   return /^https:\/\//.test(FLOW_URL) && !FLOW_URL.includes("REEMPLAZAR_");
 }
@@ -685,8 +731,20 @@ function initialize() {
   document.querySelector("#closeDialog").addEventListener("click", () => resultDialog.close());
   window.addEventListener("online", updateConnectionState);
   window.addEventListener("offline", updateConnectionState);
-  window.addEventListener("beforeinstallprompt", (event) => { event.preventDefault(); deferredInstallPrompt = event; installButton.hidden = false; });
-  installButton.addEventListener("click", async () => { if (!deferredInstallPrompt) return; deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; deferredInstallPrompt = null; installButton.hidden = true; });
+  deferredInstallPrompt = window.MASOL_INSTALL_STATE?.promptEvent || null;
+  installButton.hidden = isStandaloneApp();
+  window.addEventListener("beforeinstallprompt", captureInstallPrompt);
+  document.addEventListener("masol-install-prompt-ready", () => {
+    deferredInstallPrompt = window.MASOL_INSTALL_STATE?.promptEvent || null;
+    installButton.hidden = isStandaloneApp();
+  });
+  window.addEventListener("appinstalled", () => {
+    deferredInstallPrompt = null;
+    if (window.MASOL_INSTALL_STATE) window.MASOL_INSTALL_STATE.promptEvent = null;
+    installButton.hidden = true;
+    showToast("Aplicación instalada correctamente.");
+  });
+  installButton.addEventListener("click", requestAppInstall);
   if ("serviceWorker" in navigator) {
     const registerServiceWorker = () => navigator.serviceWorker.register("./service-worker.js");
     if (document.readyState === "complete") registerServiceWorker();

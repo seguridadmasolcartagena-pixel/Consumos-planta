@@ -11,13 +11,13 @@ assert.match(auth, /c5c2fdc13e5a50820763d623d5cfd1d4085525010980ae35d682a44bc9a8
 assert.match(auth, /SESSION_DURATION_MS = 8 \* 60 \* 60 \* 1000/);
 assert.match(auth, /LOCK_DURATION_MS = 5 \* 60 \* 1000/);
 assert.match(auth, /MAX_ATTEMPTS = 5/);
-assert.match(auth, /loadScript\("app\.js\?v=19"\)/);
+assert.match(auth, /loadScript\("app\.js\?v=21"\)/);
 assert.match(auth, /id = "logoutButton"/);
 assert.match(html, /body class="auth-pending"/);
-assert.match(html, /auth\.js\?v=19/);
+assert.match(html, /auth\.js\?v=21/);
 assert.doesNotMatch(html, /<script src="app\.js/);
-assert.match(worker, /masol-lecturas-v19/);
-assert.match(worker, /auth\.js\?v=19/);
+assert.match(worker, /masol-lecturas-v21/);
+assert.match(worker, /auth\.js\?v=21/);
 assert.match(app, /document\.readyState === "complete"/);
 assert.match(app, /registerServiceWorker/);
 
