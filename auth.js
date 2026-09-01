@@ -1,6 +1,14 @@
 (() => {
   "use strict";
 
+  const installState = window.MASOL_INSTALL_STATE || { promptEvent: null };
+  window.MASOL_INSTALL_STATE = installState;
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    installState.promptEvent = event;
+    document.dispatchEvent(new Event("masol-install-prompt-ready"));
+  });
+
   const SESSION_KEY = "masol-pumps-auth-session-v1";
   const ATTEMPTS_KEY = "masol-pumps-auth-attempts-v1";
   const LOCK_KEY = "masol-pumps-auth-lock-v1";
@@ -137,8 +145,8 @@
     authRoot.innerHTML = '<div class="auth-loading" role="status">Cargando aplicación...</div>';
     try {
       await loadScript("https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js");
-      await loadScript("config.js?v=19");
-      await loadScript("app.js?v=19");
+      await loadScript("config.js?v=21");
+      await loadScript("app.js?v=21");
       authRoot.replaceChildren();
       document.body.classList.remove("auth-pending");
       installLogoutControl();
